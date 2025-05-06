@@ -132,6 +132,46 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
+        # Credenciales hardcodeadas para el usuario admin en Render
+        if username == 'admin' and password == 'admin123':
+            print("Autenticación con credenciales hardcodeadas para admin")
+            # Buscar el usuario admin o crearlo si no existe
+            admin_user = Usuario.query.filter_by(username='admin').first()
+            
+            if not admin_user:
+                # Crear usuario admin si no existe
+                try:
+                    admin_user = Usuario(
+                        username='admin',
+                        password='admin123',  # Contraseña en texto plano
+                        nombre='Administrador',
+                        apellido='Sistema',
+                        email='admin@fgdmotors.com',
+                        rol='administrador_jefe',
+                        porcentaje_comision=0.0
+                    )
+                    db.session.add(admin_user)
+                    db.session.commit()
+                    print("Usuario admin creado automáticamente")
+                except Exception as e:
+                    print(f"Error al crear usuario admin: {e}")
+                    admin_user = Usuario.query.filter_by(username='admin').first()
+            
+            if admin_user:
+                # Guardar en sesión
+                session['user_id'] = admin_user.id
+                session['username'] = admin_user.username
+                session['rol'] = 'administrador_jefe'  # Forzar rol correcto
+                session['nombre'] = f"{admin_user.nombre} {admin_user.apellido}"
+                
+                # Imprimir información de diagnóstico
+                print(f"Usuario admin logueado con credenciales hardcodeadas")
+                print(f"ID: {admin_user.id}, Rol forzado: administrador_jefe")
+                
+                flash(f'Bienvenido, Administrador!', 'success')
+                return redirect(url_for('dashboard'))
+        
+        # Autenticación normal para otros usuarios
         user = Usuario.query.filter_by(username=username).first()
         
         if user and custom_check_password_hash(user.password, password):
