@@ -9,4 +9,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 # Asegurarse de que la base de datos existe
-python -c "from app_final import db; db.create_all()"
+python -c "from app import db; db.create_all()"
+
+# Crear usuario administrador
+python create_admin.py
