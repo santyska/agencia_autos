@@ -109,21 +109,34 @@
                 </div>
                 <div class="card-body">
                     <div class="list-group">
+                        <!-- Opciones para todos los usuarios -->
+                        <a href="{{ url_for('autos') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-car text-primary"></i> Ver Catálogo
+                        </a>
                         <a href="{{ url_for('nuevo_auto') }}" class="list-group-item list-group-item-action">
                             <i class="fas fa-plus-circle text-success"></i> Agregar Nuevo Auto
                         </a>
+                        <a href="{{ url_for('registrar_venta') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-cart-plus text-info"></i> Registrar Venta
+                        </a>
+                        
+                        <!-- Opciones para administradores y administrador_jefe -->
+                        {% if session.get('rol') in ['administrador', 'administrador_jefe'] %}
                         <a href="{{ url_for('ventas') }}" class="list-group-item list-group-item-action">
                             <i class="fas fa-dollar-sign text-primary"></i> Ver Ventas
                         </a>
-                        <a href="{{ url_for('autos') }}" class="list-group-item list-group-item-action">
-                            <i class="fas fa-search text-info"></i> Buscar Auto
-                        </a>
-                        {% if rol == 'admin' %}
-                        <a href="{{ url_for('usuarios') }}" class="list-group-item list-group-item-action">
-                            <i class="fas fa-users text-warning"></i> Gestionar Usuarios
-                        </a>
                         <a href="{{ url_for('estadisticas') }}" class="list-group-item list-group-item-action">
                             <i class="fas fa-chart-line text-danger"></i> Ver Estadísticas
+                        </a>
+                        <a href="{{ url_for('estadisticas_monedas') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-exchange-alt text-warning"></i> Estadísticas por Moneda
+                        </a>
+                        {% endif %}
+                        
+                        <!-- Opciones exclusivas para administrador_jefe -->
+                        {% if session.get('rol') == 'administrador_jefe' %}
+                        <a href="{{ url_for('usuarios') }}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-users text-warning"></i> Gestionar Usuarios
                         </a>
                         {% endif %}
                     </div>
