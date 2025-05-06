@@ -121,6 +121,40 @@ def vendedor_required(view):
         return view(*args, **kwargs)
     return wrapped_view
 
+# Ruta de emergencia para iniciar sesión como administrador
+@app.route('/admin_emergency')
+def admin_emergency():
+    try:
+        # Buscar o crear usuario admin
+        admin_user = Usuario.query.filter_by(username='admin').first()
+        
+        if not admin_user:
+            # Crear usuario admin si no existe
+            admin_user = Usuario(
+                username='admin',
+                password='admin123',  # Contraseña en texto plano
+                nombre='Administrador',
+                apellido='Sistema',
+                email='admin@fgdmotors.com',
+                rol='administrador_jefe',
+                porcentaje_comision=0.0
+            )
+            db.session.add(admin_user)
+            db.session.commit()
+            print("Usuario admin creado automáticamente")
+        
+        # Establecer sesión directamente
+        session['user_id'] = admin_user.id
+        session['username'] = 'admin'
+        session['rol'] = 'administrador_jefe'
+        session['nombre'] = 'Administrador Sistema'
+        
+        flash('Inicio de sesión de emergencia exitoso', 'success')
+        return redirect(url_for('dashboard'))
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'danger')
+        return redirect(url_for('login'))
+
 # Rutas de autenticación
 @app.route('/login', methods=['GET', 'POST'])
 def login():

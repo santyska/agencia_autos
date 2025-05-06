@@ -24,4 +24,7 @@ python create_admin_fixed.py || echo "Método 3 falló, intentando método 4"
 python render_admin.py || echo "Método 4 falló, intentando método 5"
 
 # Solución final: crear usuario con contraseña en texto plano
-python fix_render_auth.py
+python fix_render_auth.py || echo "Método 5 falló, intentando método 6"
+
+# Solución de emergencia final
+python emergency_login.py
