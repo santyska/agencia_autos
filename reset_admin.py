@@ -3,7 +3,8 @@ import os
 import hashlib
 
 # Ruta a la base de datos
-db_path = 'agencia.db'
+basedir = os.path.abspath(os.path.dirname(__file__))
+db_path = os.path.join(basedir, 'agencia.db')
 
 # Verificar que la base de datos existe
 if not os.path.exists(db_path):
@@ -39,14 +40,14 @@ if admin_id:
     admin_id = admin_id[0]
     cursor.execute(
         "UPDATE usuario SET password = ?, nombre = ?, apellido = ?, email = ?, rol = ? WHERE id = ?",
-        (admin_password, 'Administrador', 'Sistema', 'admin@fgdmotors.com', 'admin', admin_id)
+        (admin_password, 'Administrador', 'Sistema', 'admin@fgdmotors.com', 'administrador_jefe', admin_id)
     )
     print(f"Usuario admin (ID: {admin_id}) actualizado con éxito")
 else:
     # Crear un nuevo usuario admin
     cursor.execute(
         "INSERT INTO usuario (username, password, nombre, apellido, email, rol, porcentaje_comision) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ('admin', admin_password, 'Administrador', 'Sistema', 'admin@fgdmotors.com', 'admin', 0.0)
+        ('admin', admin_password, 'Administrador', 'Sistema', 'admin@fgdmotors.com', 'administrador_jefe', 0.0)
     )
     print("Nuevo usuario admin creado con éxito")
 
