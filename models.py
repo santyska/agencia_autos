@@ -31,7 +31,7 @@ class Usuario(db.Model):
     nombre = db.Column(db.String(100), nullable=False)
     apellido = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
-    rol = db.Column(db.String(20), default='vendedor')  # 'admin' o 'vendedor'
+    rol = db.Column(db.String(20), default='vendedor')  # 'administrador_jefe', 'administrador' o 'vendedor'
     porcentaje_comision = db.Column(db.Float, default=5.0)  # Porcentaje de comisión por venta
     fecha_registro = db.Column(db.DateTime, default=datetime.utcnow)
     activo = db.Column(db.Boolean, default=True)

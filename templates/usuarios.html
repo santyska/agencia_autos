@@ -34,13 +34,38 @@
                             <td>{{ usuario.nombre }} {{ usuario.apellido }}</td>
                             <td>{{ usuario.email }}</td>
                             <td>
-                                <span class="badge {% if usuario.rol == 'admin' %}bg-danger{% else %}bg-success{% endif %}">
-                                    {{ usuario.rol }}
-                                </span>
+                                {% if usuario.rol == 'pendiente' %}
+                                    <span class="badge bg-warning text-dark">Pendiente</span>
+                                {% elif usuario.rol == 'administrador_jefe' %}
+                                    <span class="badge bg-danger">Admin Jefe</span>
+                                {% elif usuario.rol == 'administrador' or usuario.rol == 'admin' %}
+                                    <span class="badge bg-primary">Administrador</span>
+                                {% else %}
+                                    <span class="badge bg-success">Vendedor</span>
+                                {% endif %}
                             </td>
                             <td>{{ usuario.porcentaje_comision }}%</td>
                             <td>
                                 <div class="btn-group btn-group-sm">
+                                    {% if usuario.rol == 'pendiente' and (session.get('rol') == 'administrador_jefe' or session.get('rol') == 'admin') %}
+                                    <!-- Botones para aprobar/rechazar usuarios pendientes -->
+                                    <a href="{{ url_for('aprobar_usuario', usuario_id=usuario.id, rol='vendedor') }}" 
+                                       class="btn btn-success"
+                                       title="Aprobar como Vendedor">
+                                        <i class="fas fa-check"></i> Vendedor
+                                    </a>
+                                    <a href="{{ url_for('aprobar_usuario', usuario_id=usuario.id, rol='administrador') }}" 
+                                       class="btn btn-primary"
+                                       title="Aprobar como Administrador">
+                                        <i class="fas fa-check"></i> Admin
+                                    </a>
+                                    <a href="{{ url_for('eliminar_usuario', usuario_id=usuario.id) }}" 
+                                       class="btn btn-danger"
+                                       onclick="return confirm('¿Está seguro de rechazar esta solicitud de usuario?')">
+                                        <i class="fas fa-times"></i>
+                                    </a>
+                                    {% else %}
+                                    <!-- Botones normales para usuarios ya aprobados -->
                                     <button type="button" class="btn btn-primary" 
                                             data-bs-toggle="modal" 
                                             data-bs-target="#modalEditarUsuario"
@@ -53,12 +78,13 @@
                                             data-comision="{{ usuario.porcentaje_comision }}">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    {% if usuario.id != session.get('user_id') %}
+                                    {% if usuario.id != session.get('user_id') and session.get('rol') == 'administrador_jefe' %}
                                     <a href="{{ url_for('eliminar_usuario', usuario_id=usuario.id) }}" 
                                        class="btn btn-danger"
                                        onclick="return confirm('¿Está seguro de eliminar este usuario?')">
                                         <i class="fas fa-trash-alt"></i>
                                     </a>
+                                    {% endif %}
                                     {% endif %}
                                 </div>
                             </td>
@@ -110,7 +136,10 @@
                         <label for="rol" class="form-label">Rol</label>
                         <select class="form-select" id="rol" name="rol" required>
                             <option value="vendedor">Vendedor</option>
-                            <option value="admin">Administrador</option>
+                            <option value="administrador">Administrador</option>
+                            {% if session.get('rol') == 'administrador_jefe' %}
+                            <option value="administrador_jefe">Administrador Jefe</option>
+                            {% endif %}
                         </select>
                     </div>
                     <div class="mb-3">
@@ -165,7 +194,10 @@
                         <label for="edit_rol" class="form-label">Rol</label>
                         <select class="form-select" id="edit_rol" name="rol" required>
                             <option value="vendedor">Vendedor</option>
-                            <option value="admin">Administrador</option>
+                            <option value="administrador">Administrador</option>
+                            {% if session.get('rol') == 'administrador_jefe' %}
+                            <option value="administrador_jefe">Administrador Jefe</option>
+                            {% endif %}
                         </select>
                     </div>
                     <div class="mb-3">

@@ -86,8 +86,20 @@ def admin_required(view):
         if 'user_id' not in session:
             flash('Debes iniciar sesión para acceder a esta página', 'warning')
             return redirect(url_for('login'))
-        if session.get('rol') != 'admin':
+        if session.get('rol') not in ['admin', 'administrador', 'administrador_jefe']:
             flash('No tienes permisos para acceder a esta página', 'danger')
+            return redirect(url_for('dashboard'))
+        return view(*args, **kwargs)
+    return wrapped_view
+
+def admin_jefe_required(view):
+    @wraps(view)
+    def wrapped_view(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Debes iniciar sesión para acceder a esta página', 'warning')
+            return redirect(url_for('login'))
+        if session.get('rol') != 'administrador_jefe':
+            flash('No tienes permisos para acceder a esta página. Se requiere rol de administrador jefe.', 'danger')
             return redirect(url_for('dashboard'))
         return view(*args, **kwargs)
     return wrapped_view
@@ -124,6 +136,68 @@ def logout():
     session.clear()
     flash('Has cerrado sesión correctamente', 'info')
     return redirect(url_for('login'))
+
+@app.route('/registro', methods=['GET', 'POST'])
+def registro():
+    # Si ya está logueado, redirigir al inicio
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+        
+    if request.method == 'POST':
+        # Obtener datos del formulario
+        username = request.form.get('username')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        nombre = request.form.get('nombre')
+        apellido = request.form.get('apellido')
+        email = request.form.get('email')
+        
+        # Validaciones básicas
+        if password != confirm_password:
+            flash('Las contraseñas no coinciden', 'danger')
+            return render_template('registro.html')
+            
+        # Verificar si el usuario ya existe
+        if Usuario.query.filter_by(username=username).first():
+            flash('El nombre de usuario ya está en uso', 'danger')
+            return render_template('registro.html')
+            
+        # Verificar si el email ya existe
+        if Usuario.query.filter_by(email=email).first():
+            flash('El email ya está registrado', 'danger')
+            return render_template('registro.html')
+        
+        # Determinar el rol del usuario
+        # Si no hay usuarios, el primero será administrador_jefe
+        usuarios_count = Usuario.query.count()
+        rol = 'administrador_jefe' if usuarios_count == 0 else 'pendiente'
+        
+        # Crear nuevo usuario
+        nuevo_usuario = Usuario(
+            username=username,
+            password=custom_generate_password_hash(password),
+            nombre=nombre,
+            apellido=apellido,
+            email=email,
+            rol=rol,
+            porcentaje_comision=5.0 if rol == 'vendedor' else 0.0
+        )
+        
+        try:
+            db.session.add(nuevo_usuario)
+            db.session.commit()
+            
+            if rol == 'administrador_jefe':
+                flash('Cuenta creada correctamente. Eres el primer usuario y has sido registrado como Administrador Jefe.', 'success')
+            else:
+                flash('Cuenta creada correctamente. Un administrador debe aprobar tu cuenta.', 'info')
+                
+            return redirect(url_for('login'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al crear la cuenta: {str(e)}', 'danger')
+    
+    return render_template('registro.html')
 
 # Ruta principal - dashboard
 @app.route('/')
@@ -642,7 +716,7 @@ def editar_usuario(usuario_id):
     
     return render_template('editar_usuario.html', usuario=usuario)
 
-@app.route('/usuarios/<int:usuario_id>/eliminar', methods=['POST'])
+@app.route('/usuarios/<int:usuario_id>/eliminar', methods=['POST', 'GET'])
 @admin_required
 def eliminar_usuario(usuario_id):
     # No permitir eliminar al usuario actualmente logueado
@@ -653,10 +727,59 @@ def eliminar_usuario(usuario_id):
     # Buscar el usuario
     usuario = Usuario.query.get_or_404(usuario_id)
     
-    db.session.delete(usuario)
-    db.session.commit()
+    # Solo administrador_jefe puede eliminar usuarios que no estén pendientes
+    if usuario.rol != 'pendiente' and session.get('rol') != 'administrador_jefe':
+        flash('Solo el administrador jefe puede eliminar usuarios activos', 'danger')
+        return redirect(url_for('usuarios'))
     
-    flash('Usuario eliminado correctamente', 'success')
+    try:
+        db.session.delete(usuario)
+        db.session.commit()
+        
+        if usuario.rol == 'pendiente':
+            flash('Solicitud de usuario rechazada', 'success')
+        else:
+            flash('Usuario eliminado correctamente', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error al eliminar el usuario: {str(e)}', 'danger')
+    
+    return redirect(url_for('usuarios'))
+
+@app.route('/usuarios/aprobar/<int:usuario_id>/<rol>')
+@admin_required
+def aprobar_usuario(usuario_id, rol):
+    # Verificar que el rol sea válido
+    if rol not in ['vendedor', 'administrador', 'administrador_jefe']:
+        flash('Rol no válido', 'danger')
+        return redirect(url_for('usuarios'))
+    
+    # Solo administrador_jefe puede crear otros administradores_jefe
+    if rol == 'administrador_jefe' and session.get('rol') != 'administrador_jefe':
+        flash('Solo el administrador jefe puede crear otros administradores jefe', 'danger')
+        return redirect(url_for('usuarios'))
+    
+    usuario = Usuario.query.get_or_404(usuario_id)
+    
+    # Verificar que el usuario esté pendiente
+    if usuario.rol != 'pendiente':
+        flash('Este usuario ya ha sido aprobado', 'warning')
+        return redirect(url_for('usuarios'))
+    
+    try:
+        usuario.rol = rol
+        # Establecer comisión según el rol
+        if rol == 'vendedor':
+            usuario.porcentaje_comision = 5.0
+        else:
+            usuario.porcentaje_comision = 0.0
+            
+        db.session.commit()
+        flash(f'Usuario aprobado como {rol}', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error al aprobar el usuario: {str(e)}', 'danger')
+    
     return redirect(url_for('usuarios'))
 
 # Rutas para estadísticas
