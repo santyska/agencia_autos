@@ -4,8 +4,38 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
 import uuid
+import hashlib
 from datetime import datetime
 from functools import wraps
+
+# Funciones personalizadas para el hash de contraseñas
+def custom_generate_password_hash(password):
+    """Genera un hash de contraseña usando SHA-256 en lugar de scrypt"""
+    method = 'sha256'
+    salt = os.urandom(16).hex()
+    hash_val = hashlib.sha256((salt + password).encode()).hexdigest()
+    return f"{method}${salt}${hash_val}"
+
+def custom_check_password_hash(pwhash, password):
+    """Verifica una contraseña contra un hash"""
+    if pwhash.startswith('scrypt:'):
+        # Para contraseñas antiguas con formato scrypt, siempre devolver False
+        # lo que obligará a los usuarios a restablecer sus contraseñas
+        return False
+    
+    try:
+        # Intenta usar el método de werkzeug primero
+        return check_password_hash(pwhash, password)
+    except ValueError:
+        # Si falla, usa nuestro método personalizado
+        if '$' not in pwhash:
+            return False
+        
+        method, salt, hash_val = pwhash.split('$', 2)
+        if method == 'sha256':
+            calculated_hash = hashlib.sha256((salt + password).encode()).hexdigest()
+            return calculated_hash == hash_val
+        return False
 
 # Crear la app Flask
 app = Flask(__name__)
@@ -29,11 +59,16 @@ db.init_app(app)
 
 # Filtros personalizados para Jinja2
 @app.template_filter('formato_precio')
-def formato_precio(value):
-    """Formatea un número como precio con separador de miles y símbolo de moneda"""
-    if value is None:
-        return "$0"
-    return f"${value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+def formato_precio(value, moneda='ARS'):
+    if value is None or value == "":
+        return "$0" if moneda == 'ARS' else "US$0"
+    try:
+        if moneda == 'USD':
+            return f"US${value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        else:  # Default ARS
+            return f"${value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    except (ValueError, TypeError):
+        return "$0" if moneda == 'ARS' else "US$0"
 
 # Decoradores para autenticación
 def login_required(view):
@@ -57,7 +92,7 @@ def admin_required(view):
         return view(*args, **kwargs)
     return wrapped_view
 
-# Definir rutas directamente en la aplicación
+# Rutas de autenticación
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     # Si ya está logueado, redirigir al inicio
@@ -70,7 +105,7 @@ def login():
         
         user = Usuario.query.filter_by(username=username).first()
         
-        if user and check_password_hash(user.password, password):
+        if user and custom_check_password_hash(user.password, password):
             # Guardar en sesión
             session['user_id'] = user.id
             session['username'] = user.username
@@ -107,17 +142,20 @@ def dashboard():
                           usuario=session.get('nombre'),
                           rol=session.get('rol'))
 
-# Rutas de autos
+# Rutas para autos
 @app.route('/autos')
 def autos():
-    # Filtros (solo disponibles para usuarios logueados)
-    if 'user_id' in session:
+    try:
+        # Filtros
         marca = request.args.get('marca', '')
         modelo = request.args.get('modelo', '')
         anio = request.args.get('anio', '')
+        precio_min = request.args.get('precio_min', '')
+        precio_max = request.args.get('precio_max', '')
+        moneda = request.args.get('moneda', 'ARS')
         
-        # Consulta base
-        query = Auto.query
+        # Consulta base - SIEMPRE mostrar solo autos disponibles
+        query = Auto.query.filter_by(estado=EstadoAuto.DISPONIBLE)
         
         # Aplicar filtros si existen
         if marca:
@@ -127,22 +165,24 @@ def autos():
         if anio and anio.isdigit():
             query = query.filter(Auto.anio == int(anio))
         
+        # Filtrar por moneda solo si se especifica explícitamente en la URL
+        if moneda in ['ARS', 'USD'] and 'moneda' in request.args:  # Solo filtrar si el parámetro moneda está presente en la URL
+            query = query.filter(Auto.moneda == moneda)
+        
+        # Filtrar por precio
+        if precio_min and precio_min.isdigit():
+            query = query.filter(Auto.precio >= float(precio_min))
+        if precio_max and precio_max.isdigit():
+            query = query.filter(Auto.precio <= float(precio_max))
+        
         # Obtener resultados
-        try:
-            autos = query.order_by(Auto.id.desc()).all()
-        except Exception as e:
-            app.logger.error(f"Error al obtener autos: {e}")
-            # Si hay error con fecha_publicacion, ordenar por id
-            autos = query.order_by(Auto.id.desc()).all()
-    else:
-        # Para visitantes, mostrar solo autos disponibles sin filtros
-        try:
-            autos = Auto.query.filter_by(estado=EstadoAuto.DISPONIBLE).order_by(Auto.id.desc()).all()
-        except Exception as e:
-            app.logger.error(f"Error al obtener autos para visitantes: {e}")
-            autos = Auto.query.filter_by(estado=EstadoAuto.DISPONIBLE).order_by(Auto.id.desc()).all()
+        autos = query.order_by(Auto.id.desc()).all()
     
-    return render_template('autos.html', autos=autos, is_logged_in='user_id' in session)
+        return render_template('autos.html', autos=autos, is_logged_in='user_id' in session)
+    except Exception as e:
+        app.logger.error(f"Error en la ruta /autos: {e}")
+        # Devolver una página de error genérica
+        return render_template('error.html', error=str(e)), 500
 
 @app.route('/auto/<int:auto_id>')
 def detalle_auto(auto_id):
@@ -160,6 +200,90 @@ def detalle_auto(auto_id):
     
     return render_template('detalle_auto.html', auto=auto)
 
+@app.route('/auto/<int:auto_id>/editar', methods=['GET', 'POST'])
+@login_required
+def editar_auto(auto_id):
+    auto = Auto.query.get_or_404(auto_id)
+    
+    if request.method == 'POST':
+        # Obtener datos del formulario
+        auto.marca = request.form.get('marca', '')
+        auto.modelo = request.form.get('modelo', '')
+        auto.anio = int(request.form.get('anio', '0'))
+        auto.precio = float(request.form.get('precio', '0'))
+        auto.moneda = request.form.get('moneda', 'ARS')  # Actualizar la moneda
+        auto.color = request.form.get('color', '')
+        auto.kilometraje = int(request.form.get('kilometraje', '0'))
+        auto.descripcion = request.form.get('descripcion', '')
+        
+        # Precio de compra (solo para administradores)
+        if session.get('rol') == 'admin':
+            auto.precio_compra = float(request.form.get('precio_compra', '0'))
+        
+        # Actualizar el estado si se especifica
+        estado = request.form.get('estado')
+        if estado and estado in [e.name for e in EstadoAuto]:
+            auto.estado = EstadoAuto[estado]
+        
+        db.session.commit()
+        
+        # Procesar las fotos nuevas
+        if 'fotos' in request.files:
+            fotos = request.files.getlist('fotos')
+            for foto in fotos:
+                if foto and foto.filename:
+                    # Crear directorio si no existe
+                    directorio_fotos = os.path.join(app.static_folder, 'uploads', 'autos', str(auto.id))
+                    if not os.path.exists(directorio_fotos):
+                        os.makedirs(directorio_fotos)
+                    
+                    # Guardar la foto
+                    filename = secure_filename(foto.filename)
+                    nombre_archivo = f"{uuid.uuid4()}_{filename}"
+                    ruta_relativa = os.path.join('uploads', 'autos', str(auto.id), nombre_archivo)
+                    ruta_completa = os.path.join(app.static_folder, ruta_relativa)
+                    foto.save(ruta_completa)
+                    
+                    # Normalizar la ruta para URLs (usar forward slashes)
+                    ruta_normalizada = ruta_relativa.replace('\\', '/')
+                    
+                    # Crear registro en la base de datos
+                    foto_auto = FotoAuto(ruta_archivo=ruta_normalizada, auto_id=auto.id)
+                    db.session.add(foto_auto)
+        
+        db.session.commit()
+        
+        flash('Auto actualizado correctamente', 'success')
+        return redirect(url_for('detalle_auto', auto_id=auto.id))
+    
+    # Preparar datos para la vista
+    estados = [e.name for e in EstadoAuto]
+    
+    return render_template('editar_auto.html', auto=auto, estados=estados)
+
+@app.route('/auto/<int:auto_id>/fotos/eliminar/<int:foto_id>', methods=['POST'])
+@login_required
+def eliminar_foto(auto_id, foto_id):
+    foto = FotoAuto.query.get_or_404(foto_id)
+    
+    # Verificar que la foto pertenezca al auto
+    if foto.auto_id != auto_id:
+        flash('La foto no pertenece a este auto', 'danger')
+        return redirect(url_for('editar_auto', auto_id=auto_id))
+    
+    # Eliminar el archivo físico si existe
+    if foto.ruta_archivo:
+        ruta_completa = os.path.join(app.static_folder, foto.ruta_archivo)
+        if os.path.exists(ruta_completa):
+            os.remove(ruta_completa)
+    
+    # Eliminar el registro de la base de datos
+    db.session.delete(foto)
+    db.session.commit()
+    
+    flash('Foto eliminada correctamente', 'success')
+    return redirect(url_for('editar_auto', auto_id=auto_id))
+
 @app.route('/autos/nuevo', methods=['GET', 'POST'])
 @login_required
 def nuevo_auto():
@@ -169,6 +293,7 @@ def nuevo_auto():
         modelo = request.form.get('modelo', '')
         anio = request.form.get('anio', '0')
         precio = request.form.get('precio', '0')
+        moneda = request.form.get('moneda', 'ARS')
         color = request.form.get('color', '')
         kilometraje = request.form.get('kilometraje', '0')
         descripcion = request.form.get('descripcion', '')
@@ -195,6 +320,7 @@ def nuevo_auto():
             anio=anio_int,
             precio=precio_float,
             precio_compra=precio_compra_float,
+            moneda=moneda,  # Guardar la moneda seleccionada
             color=color,
             kilometraje=kilometraje_int,
             descripcion=descripcion,
@@ -239,7 +365,7 @@ def nuevo_auto():
     
     return render_template('nuevo_auto.html')
 
-# Rutas de ventas
+# Rutas para ventas
 @app.route('/ventas')
 @login_required
 def ventas():
@@ -318,6 +444,11 @@ def ventas():
     # Estados de pago
     estados = [e.value for e in EstadoPago]
     
+    # Calcular totales financieros
+    total_ventas = sum(venta.precio_venta for venta in ventas)
+    total_inversion = sum(venta.auto.precio_compra if venta.auto and venta.auto.precio_compra is not None else 0 for venta in ventas)
+    total_ganancia = sum((venta.precio_venta - (venta.auto.precio_compra if venta.auto and venta.auto.precio_compra is not None else 0)) for venta in ventas)
+    
     return render_template('ventas.html', 
                         ventas=ventas, 
                         meses=meses, 
@@ -325,69 +456,96 @@ def ventas():
                         estados=estados,
                         mes_seleccionado=mes,
                         anio_seleccionado=anio,
-                        estado_seleccionado=estado)
+                        estado_seleccionado=estado,
+                        total_ventas=total_ventas,
+                        total_inversion=total_inversion,
+                        total_ganancia=total_ganancia)
 
 @app.route('/ventas/registrar', methods=['GET', 'POST'])
 @login_required
 def registrar_venta():
-    # Obtener autos disponibles
-    autos_disponibles = Auto.query.filter_by(estado=EstadoAuto.DISPONIBLE).all()
-    
-    if request.method == 'POST':
-        # Obtener datos del formulario
-        auto_id = request.form.get('auto_id')
-        cliente_nombre = request.form.get('cliente_nombre')
-        cliente_email = request.form.get('cliente_email')
-        cliente_telefono = request.form.get('cliente_telefono')
-        monto_seña = request.form.get('monto_seña', '0')
+    try:
+        # Obtener autos disponibles
+        autos_disponibles = Auto.query.filter_by(estado=EstadoAuto.DISPONIBLE).all()
         
-        # Validar datos
-        if not auto_id or not cliente_nombre:
-            flash('Faltan datos obligatorios', 'danger')
-            return redirect(url_for('registrar_venta'))
+        # Verificar que haya autos disponibles
+        if not autos_disponibles:
+            flash('No hay autos disponibles para vender. Agregue autos primero.', 'warning')
+            return redirect(url_for('autos'))
         
-        # Obtener el auto
-        auto = Auto.query.get_or_404(auto_id)
+        if request.method == 'POST':
+            # Obtener datos del formulario
+            auto_id = request.form.get('auto_id')
+            cliente_nombre = request.form.get('cliente_nombre')
+            cliente_apellido = request.form.get('cliente_apellido', '')
+            cliente_email = request.form.get('cliente_email')
+            cliente_telefono = request.form.get('cliente_telefono')
+            cliente_dni = request.form.get('cliente_dni', '')
+            monto_seña = request.form.get('monto_seña', '0')
+            
+            # Validar datos
+            if not auto_id or not cliente_nombre:
+                flash('Faltan datos obligatorios', 'danger')
+                return redirect(url_for('registrar_venta'))
+            
+            # Obtener el auto
+            auto = Auto.query.get_or_404(auto_id)
+            
+            # Verificar que el auto esté disponible
+            if auto.estado != EstadoAuto.DISPONIBLE:
+                flash('El auto seleccionado no está disponible', 'danger')
+                return redirect(url_for('registrar_venta'))
+            
+            # Crear la venta
+            try:
+                monto_seña_float = float(monto_seña) if monto_seña else 0.0
+            except ValueError:
+                flash('El monto de la seña debe ser un número válido', 'danger')
+                return redirect(url_for('registrar_venta'))
+            
+            # Determinar estado de pago
+            estado_pago = EstadoPago.SEÑADO if monto_seña_float > 0 else EstadoPago.PENDIENTE
+            
+            # Crear la venta
+            nueva_venta = Venta(
+                auto_id=auto_id,
+                cliente_nombre=cliente_nombre,
+                cliente_apellido=cliente_apellido,
+                cliente_email=cliente_email,
+                cliente_telefono=cliente_telefono,
+                cliente_dni=cliente_dni,
+                monto_seña=monto_seña_float,
+                precio_venta=auto.precio,
+                fecha_seña=datetime.now(),  # Siempre establecer una fecha
+                estado_pago=estado_pago,
+                vendedor_id=session.get('user_id')
+            )
+            
+            # Actualizar estado del auto
+            auto.estado = EstadoAuto.VENDIDO
+            
+            # Guardar cambios
+            db.session.add(nueva_venta)
+            db.session.commit()
+            
+            flash('Venta registrada correctamente', 'success')
+            return redirect(url_for('ventas'))
         
-        # Verificar que el auto esté disponible
-        if auto.estado != EstadoAuto.DISPONIBLE:
-            flash('El auto seleccionado no está disponible', 'danger')
-            return redirect(url_for('registrar_venta'))
+        # Asegurarse de que los autos tengan toda la información necesaria
+        for auto in autos_disponibles:
+            if not hasattr(auto, 'id') or not auto.id:
+                app.logger.error(f"Auto sin ID: {auto}")
         
-        # Crear la venta
-        try:
-            monto_seña_float = float(monto_seña) if monto_seña else 0.0
-        except ValueError:
-            flash('El monto de la seña debe ser un número válido', 'danger')
-            return redirect(url_for('registrar_venta'))
-        
-        # Determinar estado de pago
-        estado_pago = EstadoPago.SEÑADO if monto_seña_float > 0 else EstadoPago.PENDIENTE
-        
-        # Crear la venta
-        nueva_venta = Venta(
-            auto_id=auto_id,
-            cliente_nombre=cliente_nombre,
-            cliente_email=cliente_email,
-            cliente_telefono=cliente_telefono,
-            monto_seña=monto_seña_float,
-            precio_venta=auto.precio,
-            fecha_seña=datetime.now() if monto_seña_float > 0 else None,
-            estado_pago=estado_pago,
-            vendedor_id=session.get('user_id')
-        )
-        
-        # Actualizar estado del auto
-        auto.estado = EstadoAuto.VENDIDO
-        
-        # Guardar cambios
-        db.session.add(nueva_venta)
-        db.session.commit()
-        
-        flash('Venta registrada correctamente', 'success')
-        return redirect(url_for('ventas'))
-    
-    return render_template('registrar_venta.html', autos=autos_disponibles)
+        return render_template('registrar_venta.html', autos=autos_disponibles)
+    except Exception as e:
+        app.logger.error(f"Error en la ruta /ventas/registrar: {e}")
+        return render_template('error.html', error=str(e)), 500
+
+@app.route('/ventas/<int:venta_id>')
+@login_required
+def detalle_venta(venta_id):
+    venta = Venta.query.get_or_404(venta_id)
+    return render_template('detalle_venta.html', venta=venta)
 
 @app.route('/ventas/<int:venta_id>/pagar')
 @login_required
@@ -414,13 +572,17 @@ def exportar_ventas():
     flash('Funcionalidad de exportación en desarrollo', 'info')
     return redirect(url_for('ventas'))
 
-# Rutas de usuarios
+# Rutas para usuarios
 @app.route('/usuarios')
 @admin_required
 def usuarios():
-    # Obtener todos los usuarios
-    usuarios = Usuario.query.all()
-    return render_template('usuarios.html', usuarios=usuarios)
+    try:
+        # Obtener todos los usuarios
+        usuarios = Usuario.query.all()
+        return render_template('usuarios.html', usuarios=usuarios)
+    except Exception as e:
+        app.logger.error(f"Error en la ruta /usuarios: {e}")
+        return render_template('error.html', error=str(e)), 500
 
 @app.route('/usuarios/nuevo', methods=['POST'])
 @admin_required
@@ -442,7 +604,7 @@ def nuevo_usuario():
     # Crear nuevo usuario
     nuevo_usuario = Usuario(
         username=username,
-        password=generate_password_hash(password),
+        password=custom_generate_password_hash(password),
         nombre=nombre,
         apellido=apellido,
         email=email,
@@ -472,7 +634,7 @@ def editar_usuario(usuario_id):
         # Actualizar contraseña solo si se proporciona una nueva
         nueva_password = request.form.get('password')
         if nueva_password:
-            usuario.password = generate_password_hash(nueva_password)
+            usuario.password = custom_generate_password_hash(nueva_password)
         
         db.session.commit()
         flash('Usuario actualizado correctamente', 'success')
@@ -497,58 +659,175 @@ def eliminar_usuario(usuario_id):
     flash('Usuario eliminado correctamente', 'success')
     return redirect(url_for('usuarios'))
 
-# Crear tablas y datos iniciales
-with app.app_context():
-    db.create_all()
-    
-    # Crear usuario administrador si no existe
-    if not Usuario.query.filter_by(username='admin').first():
-        admin = Usuario(
-            username='admin',
-            password=generate_password_hash('admin123'),
-            nombre='Administrador',
-            apellido='Sistema',
-            email='admin@agenciaautos.com',
-            rol='admin',
-            porcentaje_comision=0.0
-        )
-        db.session.add(admin)
-        db.session.commit()
-        print("Usuario administrador creado con éxito.")
-        print("Usuario: admin")
-        print("Contraseña: admin123")
-    
-    # Crear auto de prueba si no hay autos
-    if not Auto.query.first():
-        auto_prueba = Auto(
-            marca='Toyota', 
-            modelo='Corolla', 
-            anio=2022, 
-            precio=35000.0,
-            precio_compra=30000.0,
-            descripcion='Auto de prueba en excelente estado',
-            color='Blanco',
-            kilometraje=0,
-            estado=EstadoAuto.DISPONIBLE
-        )
-        db.session.add(auto_prueba)
-        db.session.commit()
-        print("Auto de prueba agregado.")
-
-# Iniciar el servidor
-if __name__ == '__main__':
-    app.run(debug=True)
-
-# Rutas de estadísticas
+# Rutas para estadísticas
 @app.route('/estadisticas')
 @admin_required
-def estadisticas_route():
-    return estadisticas()
-
-# Ruta principal
-@app.route('/')
-def index():
-    return render_template('index.html')
+def estadisticas():
+    try:
+        # Obtener estadísticas de ventas por mes para el año actual
+        año_actual = datetime.now().year
+        
+        # Ventas por mes
+        ventas_por_mes = []
+        for mes in range(1, 13):
+            # Contar ventas para este mes
+            count = Venta.query.filter(
+                db.extract('year', Venta.fecha_venta) == año_actual,
+                db.extract('month', Venta.fecha_venta) == mes
+            ).count()
+            
+            ventas_por_mes.append(count)
+        
+        # Ventas por vendedor
+        vendedores = Usuario.query.filter(Usuario.rol.in_(['admin', 'vendedor'])).all()
+        ventas_por_vendedor = []
+        
+        for vendedor in vendedores:
+            count = Venta.query.filter_by(vendedor_id=vendedor.id).count()
+            if count > 0:  # Solo incluir vendedores con ventas
+                ventas_por_vendedor.append({
+                    'nombre': f"{vendedor.nombre} {vendedor.apellido}",
+                    'ventas': count
+                })
+        
+        # Ordenar por cantidad de ventas (descendente)
+        ventas_por_vendedor = sorted(ventas_por_vendedor, key=lambda x: x['ventas'], reverse=True)
+        
+        # Marcas más vendidas
+        try:
+            marcas = db.session.query(
+                Auto.marca, 
+                db.func.count(Venta.id).label('count')
+            ).join(Venta, Auto.id == Venta.auto_id).group_by(Auto.marca).order_by(db.desc('count')).limit(5).all()
+            
+            marcas_vendidas = [{'marca': marca, 'count': count} for marca, count in marcas]
+        except Exception as e:
+            app.logger.error(f"Error al obtener marcas vendidas: {e}")
+            marcas_vendidas = []
+        
+        # Ingresos totales por moneda (todas las ventas, no solo las pagadas)
+        ingresos_ars = db.session.query(db.func.sum(Venta.precio_venta))\
+                      .filter(Venta.moneda == 'ARS').scalar() or 0
+        ingresos_usd = db.session.query(db.func.sum(Venta.precio_venta))\
+                      .filter(Venta.moneda == 'USD').scalar() or 0
+        
+        # Calcular costos por moneda (filtrar por la moneda de la venta, no del auto)
+        costo_ars = db.session.query(db.func.coalesce(db.func.sum(Auto.precio_compra), 0))\
+                    .join(Venta, Venta.auto_id == Auto.id)\
+                    .filter(Venta.moneda == 'ARS').scalar() or 0
+        costo_usd = db.session.query(db.func.coalesce(db.func.sum(Auto.precio_compra), 0))\
+                    .join(Venta, Venta.auto_id == Auto.id)\
+                    .filter(Venta.moneda == 'USD').scalar() or 0
+        
+        # Calcular ganancias por moneda
+        ganancia_ars = ingresos_ars - costo_ars
+        ganancia_usd = ingresos_usd - costo_usd
+        
+        # Totales (para compatibilidad con código existente)
+        ingresos_totales = ingresos_ars + ingresos_usd  # Suma simple para mostrar un total general
+        costo_total = costo_ars + costo_usd
+        ganancia_total = ganancia_ars + ganancia_usd
+        
+        # Ingresos y ganancias por mes (separados por moneda)
+        ingresos_por_mes_ars = []
+        ingresos_por_mes_usd = []
+        ganancias_por_mes_ars = []
+        ganancias_por_mes_usd = []
+        ventas_por_mes_ars = []
+        ventas_por_mes_usd = []
+        
+        for mes in range(1, 13):
+            # Contar ventas para este mes por moneda
+            count_ars = Venta.query.filter(
+                db.extract('year', Venta.fecha_venta) == año_actual,
+                db.extract('month', Venta.fecha_venta) == mes,
+                Venta.moneda == 'ARS'
+            ).count()
+            
+            count_usd = Venta.query.filter(
+                db.extract('year', Venta.fecha_venta) == año_actual,
+                db.extract('month', Venta.fecha_venta) == mes,
+                Venta.moneda == 'USD'
+            ).count()
+            
+            # Sumar ingresos para este mes en ARS
+            ingresos_mes_ars = db.session.query(db.func.sum(Venta.precio_venta)).filter(
+                db.extract('year', Venta.fecha_venta) == año_actual,
+                db.extract('month', Venta.fecha_venta) == mes,
+                Venta.moneda == 'ARS'
+            ).scalar() or 0
+            
+            # Sumar ingresos para este mes en USD
+            ingresos_mes_usd = db.session.query(db.func.sum(Venta.precio_venta)).filter(
+                db.extract('year', Venta.fecha_venta) == año_actual,
+                db.extract('month', Venta.fecha_venta) == mes,
+                Venta.moneda == 'USD'
+            ).scalar() or 0
+            
+            # Sumar costos para este mes en ARS
+            costos_mes_ars = db.session.query(db.func.coalesce(db.func.sum(Auto.precio_compra), 0))\
+                             .join(Venta, Venta.auto_id == Auto.id)\
+                             .filter(
+                                 db.extract('year', Venta.fecha_venta) == año_actual,
+                                 db.extract('month', Venta.fecha_venta) == mes,
+                                 Venta.moneda == 'ARS'
+                             ).scalar() or 0
+            
+            # Sumar costos para este mes en USD
+            costos_mes_usd = db.session.query(db.func.coalesce(db.func.sum(Auto.precio_compra), 0))\
+                             .join(Venta, Venta.auto_id == Auto.id)\
+                             .filter(
+                                 db.extract('year', Venta.fecha_venta) == año_actual,
+                                 db.extract('month', Venta.fecha_venta) == mes,
+                                 Venta.moneda == 'USD'
+                             ).scalar() or 0
+            
+            # Calcular ganancias para este mes por moneda
+            ganancia_mes_ars = ingresos_mes_ars - costos_mes_ars
+            ganancia_mes_usd = ingresos_mes_usd - costos_mes_usd
+            
+            # Guardar datos por moneda
+            ventas_por_mes_ars.append(count_ars)
+            ventas_por_mes_usd.append(count_usd)
+            ingresos_por_mes_ars.append(ingresos_mes_ars)
+            ingresos_por_mes_usd.append(ingresos_mes_usd)
+            ganancias_por_mes_ars.append(ganancia_mes_ars)
+            ganancias_por_mes_usd.append(ganancia_mes_usd)
+        
+        # Para compatibilidad con código existente
+        ingresos_por_mes = [ingresos_por_mes_ars[i] + ingresos_por_mes_usd[i] for i in range(12)]
+        ganancias_por_mes = [ganancias_por_mes_ars[i] + ganancias_por_mes_usd[i] for i in range(12)]
+        
+        # Contar el total de ventas
+        total_ventas = Venta.query.count()
+        
+        return render_template('estadisticas.html',
+                              ventas_por_mes=ventas_por_mes,
+                              ventas_por_vendedor=ventas_por_vendedor,
+                              marcas_vendidas=marcas_vendidas,
+                              ingresos_totales=ingresos_totales,
+                              ingresos_por_mes=ingresos_por_mes,
+                              ganancias_por_mes=ganancias_por_mes,
+                              año_actual=año_actual,
+                              total_ventas=total_ventas,
+                              costo_total=costo_total,
+                              ganancia_total=ganancia_total,
+                              # Variables por moneda
+                              ingresos_ars=ingresos_ars,
+                              ingresos_usd=ingresos_usd,
+                              costo_ars=costo_ars,
+                              costo_usd=costo_usd,
+                              ganancia_ars=ganancia_ars,
+                              ganancia_usd=ganancia_usd,
+                              ingresos_por_mes_ars=ingresos_por_mes_ars,
+                              ingresos_por_mes_usd=ingresos_por_mes_usd,
+                              ganancias_por_mes_ars=ganancias_por_mes_ars,
+                              ganancias_por_mes_usd=ganancias_por_mes_usd,
+                              ventas_por_mes_ars=ventas_por_mes_ars,
+                              ventas_por_mes_usd=ventas_por_mes_usd)
+    except Exception as e:
+        app.logger.error(f"Error en la ruta /estadisticas: {e}")
+        return render_template('error.html', error=str(e)), 500
 
 # Crear tablas y datos iniciales
 with app.app_context():
@@ -558,7 +837,7 @@ with app.app_context():
     if not Usuario.query.filter_by(username='admin').first():
         admin = Usuario(
             username='admin',
-            password=generate_password_hash('admin123'),
+            password=custom_generate_password_hash('admin123'),
             nombre='Administrador',
             apellido='Sistema',
             email='admin@agenciaautos.com',
