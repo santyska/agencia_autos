@@ -15,4 +15,7 @@ python -c "from app import db; db.create_all()"
 python create_admin.py || echo "Método 1 falló, intentando método 2"
 
 # Método alternativo para crear usuario admin directamente en SQLite
-python reset_admin.py
+python reset_admin.py || echo "Método 2 falló, intentando método 3"
+
+# Método optimizado con salt fijo para crear usuario admin
+python create_admin_fixed.py
