@@ -79,6 +79,30 @@
                     {% endif %}
                 </ul>
                 
+                {% if session.get('user_id') %}
+                <ul class="navbar-nav me-2">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="quickActionsDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-bolt me-1"></i> Acciones Rápidas
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{{ url_for('autos') }}"><i class="fas fa-car me-2"></i>Ver Catálogo</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('nuevo_auto') }}"><i class="fas fa-plus-circle me-2"></i>Nuevo Auto</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('registrar_venta') }}"><i class="fas fa-cart-plus me-2"></i>Registrar Venta</a></li>
+                            {% if session.get('rol') in ['administrador', 'administrador_jefe'] %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('ventas') }}"><i class="fas fa-dollar-sign me-2"></i>Ver Ventas</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('estadisticas') }}"><i class="fas fa-chart-line me-2"></i>Estadísticas</a></li>
+                            {% endif %}
+                            {% if session.get('rol') == 'administrador_jefe' %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('usuarios') }}"><i class="fas fa-users me-2"></i>Gestionar Usuarios</a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                </ul>
+                {% endif %}
+                
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
