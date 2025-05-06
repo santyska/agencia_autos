@@ -17,32 +17,51 @@ def custom_generate_password_hash(password):
     return f"{method}${salt}${hash_val}"
 
 def custom_check_password_hash(pwhash, password):
-    """Verifica una contraseña contra un hash"""
-    # Para entorno de producción en Render: verificar si la contraseña almacenada es texto plano
+    """Verifica una contraseña contra un hash con múltiples métodos para mayor compatibilidad"""
+    # Imprimir información de diagnóstico
+    print(f"Intentando verificar contraseña. Hash almacenado: {pwhash[:10]}...")
+    
+    # Método 1: Verificación directa (contraseña en texto plano)
     if pwhash == password:
-        print(f"Autenticación exitosa con contraseña en texto plano: {password}")
+        print(f"Autenticación exitosa con contraseña en texto plano")
         return True
-        
+    
+    # Método 2: Hash simple SHA-256 (usado en render_admin.py)
+    simple_hash = hashlib.sha256(password.encode()).hexdigest()
+    if pwhash == simple_hash:
+        print(f"Autenticación exitosa con hash simple SHA-256")
+        return True
+    
+    # Método 3: Formato personalizado sha256$salt$hash
+    if '$' in pwhash and pwhash.count('$') == 2:
+        try:
+            method, salt, hash_val = pwhash.split('$', 2)
+            if method == 'sha256':
+                calculated_hash = hashlib.sha256((salt + password).encode()).hexdigest()
+                if calculated_hash == hash_val:
+                    print(f"Autenticación exitosa con formato personalizado sha256$salt$hash")
+                    return True
+        except Exception as e:
+            print(f"Error al verificar formato personalizado: {e}")
+    
+    # Método 4: Werkzeug (pbkdf2:sha256, etc.)
+    if pwhash.startswith('pbkdf2:') or pwhash.startswith('sha256$'):
+        try:
+            result = check_password_hash(pwhash, password)
+            if result:
+                print(f"Autenticación exitosa con método werkzeug")
+                return True
+        except Exception as e:
+            print(f"Error al verificar con werkzeug: {e}")
+    
+    # Método 5: Scrypt (deshabilitado)
     if pwhash.startswith('scrypt:'):
-        # Para contraseñas antiguas con formato scrypt, siempre devolver False
-        # lo que obligará a los usuarios a restablecer sus contraseñas
+        print("Contraseña con formato scrypt detectada, este método está deshabilitado")
         return False
     
-    try:
-        # Intenta usar el método de werkzeug primero
-        return check_password_hash(pwhash, password)
-    except ValueError:
-        # Si falla, usa nuestro método personalizado
-        if '$' not in pwhash:
-            # Verificar si es un hash simple (usado en render_admin.py)
-            simple_hash = hashlib.sha256(password.encode()).hexdigest()
-            return pwhash == simple_hash
-        
-        method, salt, hash_val = pwhash.split('$', 2)
-        if method == 'sha256':
-            calculated_hash = hashlib.sha256((salt + password).encode()).hexdigest()
-            return calculated_hash == hash_val
-        return False
+    # Si llegamos aquí, ninguno de los métodos funcionó
+    print("Todos los métodos de verificación de contraseña fallaron")
+    return False
 
 # Crear la app Flask
 app = Flask(__name__)

@@ -27,4 +27,7 @@ python render_admin.py || echo "Método 4 falló, intentando método 5"
 python fix_render_auth.py || echo "Método 5 falló, intentando método 6"
 
 # Solución de emergencia final
-python emergency_login.py
+python emergency_login.py || echo "Método 6 falló, intentando método 7"
+
+# Actualizar todas las contraseñas a un formato compatible
+python update_passwords.py
