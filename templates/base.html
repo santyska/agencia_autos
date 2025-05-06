@@ -55,13 +55,20 @@
                         <a class="nav-link" href="{{ url_for('autos') }}"><i class="fas fa-car me-1"></i> Catálogo</a>
                     </li>
                     {% if session.get('user_id') %}
+                        {% if session.get('rol') in ['administrador', 'administrador_jefe'] %}
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('ventas') }}"><i class="fas fa-dollar-sign me-1"></i> Ventas</a>
                         </li>
-                        {% if session.get('rol') == 'admin' %}
+                        {% endif %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('registrar_venta') }}"><i class="fas fa-cart-plus me-1"></i> Registrar Venta</a>
+                        </li>
+                        {% if session.get('rol') in ['administrador', 'administrador_jefe'] %}
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ url_for('estadisticas') }}"><i class="fas fa-chart-line me-1"></i> Estadísticas</a>
                             </li>
+                        {% endif %}
+                        {% if session.get('rol') == 'administrador_jefe' %}
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ url_for('usuarios') }}"><i class="fas fa-users me-1"></i> Usuarios</a>
                             </li>

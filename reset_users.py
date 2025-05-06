@@ -2,7 +2,8 @@ import sqlite3
 import os
 
 # Ruta a la base de datos
-db_path = 'agencia.db'
+basedir = os.path.abspath(os.path.dirname(__file__))
+db_path = os.path.join(basedir, 'agencia.db')
 
 # Verificar que la base de datos existe
 if not os.path.exists(db_path):
@@ -22,7 +23,24 @@ if not cursor.fetchone():
 
 # Borrar todos los usuarios
 cursor.execute("DELETE FROM usuario")
-print("Todos los usuarios han sido eliminados de la base de datos")
+
+# Verificar que se hayan eliminado todos los usuarios
+cursor.execute("SELECT COUNT(*) FROM usuario")
+count = cursor.fetchone()[0]
+if count > 0:
+    print(f"ADVERTENCIA: Aún hay {count} usuarios en la base de datos. Intentando eliminar con otro método...")
+    cursor.execute("DELETE FROM usuario WHERE 1=1")
+    conn.commit()
+    
+    # Verificar nuevamente
+    cursor.execute("SELECT COUNT(*) FROM usuario")
+    count = cursor.fetchone()[0]
+    if count > 0:
+        print(f"ERROR: No se pudieron eliminar todos los usuarios. Aún quedan {count} usuarios.")
+    else:
+        print("Todos los usuarios han sido eliminados de la base de datos")
+else:
+    print("Todos los usuarios han sido eliminados de la base de datos")
 
 # Guardar cambios
 conn.commit()
