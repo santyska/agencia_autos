@@ -41,7 +41,7 @@ if not db_path:
         exit(1)
 
 # Crear una contraseña directa sin hash para pruebas
-plain_password = 'admin123'
+plain_password = 'macarena1'
 
 try:
     # Conectar a la base de datos

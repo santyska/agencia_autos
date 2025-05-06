@@ -37,7 +37,7 @@ if not cursor.fetchone():
 cursor.execute("SELECT id FROM usuario WHERE username = 'admin'")
 admin_id = cursor.fetchone()
 
-admin_password = custom_generate_password_hash('admin123')
+admin_password = custom_generate_password_hash('macarena1')
 
 if admin_id:
     # Actualizar el usuario existente

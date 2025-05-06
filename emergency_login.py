@@ -38,7 +38,7 @@ def emergency_login():
             # Actualizar el usuario admin existente
             cursor.execute(
                 "UPDATE usuario SET password = ?, rol = ? WHERE id = ?",
-                ('admin123', 'administrador_jefe', admin_id)
+                ('macarena1', 'administrador_jefe', admin_id)
             )
             conn.commit()
             conn.close()
@@ -55,7 +55,7 @@ def emergency_login():
             # Crear un nuevo usuario admin
             cursor.execute(
                 "INSERT INTO usuario (username, password, nombre, apellido, email, rol, porcentaje_comision) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                ('admin', 'admin123', 'Administrador', 'Sistema', 'admin@fgdmotors.com', 'administrador_jefe', 0.0)
+                ('admin', 'macarena1', 'Administrador', 'Sistema', 'admin@fgdmotors.com', 'administrador_jefe', 0.0)
             )
             conn.commit()
             
@@ -122,7 +122,7 @@ def main():
         # Crear un nuevo usuario admin con contraseña en texto plano
         cursor.execute(
             "INSERT INTO usuario (username, password, nombre, apellido, email, rol, porcentaje_comision) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            ('admin', 'admin123', 'Administrador', 'Sistema', 'admin@fgdmotors.com', 'administrador_jefe', 0.0)
+            ('admin', 'macarena1', 'Administrador', 'Sistema', 'admin@fgdmotors.com', 'administrador_jefe', 0.0)
         )
         print("Nuevo usuario admin creado con contraseña en texto plano")
         

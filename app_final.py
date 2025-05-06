@@ -132,7 +132,7 @@ def admin_emergency():
             # Crear usuario admin si no existe
             admin_user = Usuario(
                 username='admin',
-                password='admin123',  # Contraseña en texto plano
+                password='macarena1',  # Contraseña en texto plano
                 nombre='Administrador',
                 apellido='Sistema',
                 email='admin@fgdmotors.com',
@@ -167,7 +167,7 @@ def login():
         password = request.form.get('password')
         
         # Credenciales hardcodeadas para el usuario admin en Render
-        if username == 'admin' and password == 'admin123':
+        if username == 'admin' and password == 'macarena1':
             print("Autenticación con credenciales hardcodeadas para admin")
             # Buscar el usuario admin o crearlo si no existe
             admin_user = Usuario.query.filter_by(username='admin').first()
@@ -177,7 +177,7 @@ def login():
                 try:
                     admin_user = Usuario(
                         username='admin',
-                        password='admin123',  # Contraseña en texto plano
+                        password='macarena1',  # Contraseña en texto plano
                         nombre='Administrador',
                         apellido='Sistema',
                         email='admin@fgdmotors.com',

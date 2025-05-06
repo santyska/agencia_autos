@@ -61,7 +61,7 @@ try:
         print(f"Usuario admin encontrado: ID={admin_id}, Rol={rol}")
         
         # Actualizar el usuario existente
-        simple_password = generate_simple_hash('admin123')
+        simple_password = generate_simple_hash('macarena1')
         cursor.execute(
             "UPDATE usuario SET password = ?, rol = ? WHERE id = ?",
             (simple_password, 'administrador_jefe', admin_id)
@@ -69,7 +69,7 @@ try:
         print(f"Usuario admin (ID: {admin_id}) actualizado con contraseña simple")
     else:
         # Crear un nuevo usuario admin con contraseña simple
-        simple_password = generate_simple_hash('admin123')
+        simple_password = generate_simple_hash('macarena1')
         cursor.execute(
             "INSERT INTO usuario (username, password, nombre, apellido, email, rol, porcentaje_comision) VALUES (?, ?, ?, ?, ?, ?, ?)",
             ('admin', simple_password, 'Administrador', 'Sistema', 'admin@fgdmotors.com', 'administrador_jefe', 0.0)
