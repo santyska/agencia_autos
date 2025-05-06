@@ -18,4 +18,7 @@ python create_admin.py || echo "Método 1 falló, intentando método 2"
 python reset_admin.py || echo "Método 2 falló, intentando método 3"
 
 # Método optimizado con salt fijo para crear usuario admin
-python create_admin_fixed.py
+python create_admin_fixed.py || echo "Método 3 falló, intentando método 4"
+
+# Método de emergencia con hash simple para Render
+python render_admin.py

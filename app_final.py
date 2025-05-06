@@ -29,7 +29,9 @@ def custom_check_password_hash(pwhash, password):
     except ValueError:
         # Si falla, usa nuestro método personalizado
         if '$' not in pwhash:
-            return False
+            # Verificar si es un hash simple (usado en render_admin.py)
+            simple_hash = hashlib.sha256(password.encode()).hexdigest()
+            return pwhash == simple_hash
         
         method, salt, hash_val = pwhash.split('$', 2)
         if method == 'sha256':
