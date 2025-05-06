@@ -4,8 +4,38 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
 import uuid
+import hashlib
 from datetime import datetime
 from functools import wraps
+
+# Funciones personalizadas para el hash de contraseñas
+def custom_generate_password_hash(password):
+    """Genera un hash de contraseña usando SHA-256 en lugar de scrypt"""
+    method = 'sha256'
+    salt = os.urandom(16).hex()
+    hash_val = hashlib.sha256((salt + password).encode()).hexdigest()
+    return f"{method}${salt}${hash_val}"
+
+def custom_check_password_hash(pwhash, password):
+    """Verifica una contraseña contra un hash"""
+    if pwhash.startswith('scrypt:'):
+        # Para contraseñas antiguas con formato scrypt, siempre devolver False
+        # lo que obligará a los usuarios a restablecer sus contraseñas
+        return False
+    
+    try:
+        # Intenta usar el método de werkzeug primero
+        return check_password_hash(pwhash, password)
+    except ValueError:
+        # Si falla, usa nuestro método personalizado
+        if '$' not in pwhash:
+            return False
+        
+        method, salt, hash_val = pwhash.split('$', 2)
+        if method == 'sha256':
+            calculated_hash = hashlib.sha256((salt + password).encode()).hexdigest()
+            return calculated_hash == hash_val
+        return False
 
 # Crear la app Flask
 app = Flask(__name__)
@@ -75,7 +105,7 @@ def login():
         
         user = Usuario.query.filter_by(username=username).first()
         
-        if user and check_password_hash(user.password, password):
+        if user and custom_check_password_hash(user.password, password):
             # Guardar en sesión
             session['user_id'] = user.id
             session['username'] = user.username
@@ -574,7 +604,7 @@ def nuevo_usuario():
     # Crear nuevo usuario
     nuevo_usuario = Usuario(
         username=username,
-        password=generate_password_hash(password),
+        password=custom_generate_password_hash(password),
         nombre=nombre,
         apellido=apellido,
         email=email,
@@ -604,7 +634,7 @@ def editar_usuario(usuario_id):
         # Actualizar contraseña solo si se proporciona una nueva
         nueva_password = request.form.get('password')
         if nueva_password:
-            usuario.password = generate_password_hash(nueva_password)
+            usuario.password = custom_generate_password_hash(nueva_password)
         
         db.session.commit()
         flash('Usuario actualizado correctamente', 'success')
@@ -807,7 +837,7 @@ with app.app_context():
     if not Usuario.query.filter_by(username='admin').first():
         admin = Usuario(
             username='admin',
-            password=generate_password_hash('admin123'),
+            password=custom_generate_password_hash('admin123'),
             nombre='Administrador',
             apellido='Sistema',
             email='admin@agenciaautos.com',
