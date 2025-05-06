@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ auto.marca }} {{ auto.modelo }} {{ auto.anio }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <h2>{{ auto.marca }} {{ auto.modelo }} {{ auto.anio }}</h2>
+            
+            <!-- Carrusel de fotos -->
+            {% if auto.fotos %}
+            <div id="carouselFotos" class="carousel slide mb-4" data-bs-ride="carousel">
+                <div class="carousel-inner">
+                    {% for foto in auto.fotos %}
+                    <div class="carousel-item {% if loop.first %}active{% endif %}">
+                        <img src="{{ url_for('static', filename=foto.ruta_archivo) }}" class="d-block w-100" alt="{{ auto.marca }} {{ auto.modelo }}">
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if auto.fotos|length > 1 %}
+                <button class="carousel-control-prev" type="button" data-bs-target="#carouselFotos" data-bs-slide="prev">
+                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">Anterior</span>
+                </button>
+                <button class="carousel-control-next" type="button" data-bs-target="#carouselFotos" data-bs-slide="next">
+                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">Siguiente</span>
+                </button>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-4">
+                No hay fotos disponibles para este vehículo.
+            </div>
+            {% endif %}
+            
+            <!-- Detalles del auto -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Detalles del Vehículo</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Marca:</strong> {{ auto.marca }}</p>
+                            <p><strong>Modelo:</strong> {{ auto.modelo }}</p>
+                            <p><strong>Año:</strong> {{ auto.anio }}</p>
+                            {% if auto.color %}
+                            <p><strong>Color:</strong> {{ auto.color }}</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Precio:</strong> ${{ auto.precio|number_format(2, ',', '.') }}</p>
+                            {% if auto.kilometraje %}
+                            <p><strong>Kilometraje:</strong> {{ auto.kilometraje|number_format(0, ',', '.') }} km</p>
+                            {% endif %}
+                            <p><strong>Estado:</strong> {{ auto.estado.value }}</p>
+                        </div>
+                    </div>
+                    
+                    {% if auto.descripcion %}
+                    <div class="mt-3">
+                        <h5>Descripción:</h5>
+                        <p>{{ auto.descripcion }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <!-- Acciones -->
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">Contacto</h4>
+                </div>
+                <div class="card-body">
+                    <p>¿Interesado en este vehículo? Contáctenos:</p>
+                    <p><i class="fas fa-phone"></i> (123) 456-7890</p>
+                    <p><i class="fas fa-envelope"></i> contacto@agenciaautos.com</p>
+                    
+                    <div class="d-grid gap-2 mt-3">
+                        <a href="{{ whatsapp_url }}" class="btn btn-success" target="_blank">
+                            <i class="fab fa-whatsapp"></i> Compartir por WhatsApp
+                        </a>
+                        
+                        {% if current_user.is_authenticated %}
+                        {% if auto.estado == 'DISPONIBLE' %}
+                        <a href="{{ url_for('ventas.nueva_venta') }}?auto_id={{ auto.id }}" class="btn btn-primary">
+                            <i class="fas fa-dollar-sign"></i> Registrar Venta
+                        </a>
+                        {% endif %}
+                        <a href="{{ url_for('autos.editar_auto', auto_id=auto.id) }}" class="btn btn-secondary">
+                            <i class="fas fa-edit"></i> Editar Auto
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Código QR -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0">Compartir</h4>
+                </div>
+                <div class="card-body text-center">
+                    <p>Escanea este código QR para ver los detalles del vehículo:</p>
+                    <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code" class="img-fluid" style="max-width: 200px;">
+                    <div class="mt-3">
+                        <input type="text" class="form-control" value="{{ url_ficha }}" id="urlFicha" readonly>
+                        <button class="btn btn-sm btn-outline-secondary mt-2" onclick="copiarURL()">
+                            <i class="fas fa-copy"></i> Copiar URL
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Botones de navegación -->
+    <div class="row mt-3 mb-5">
+        <div class="col-12">
+            <a href="{{ url_for('autos.autos') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Volver al Catálogo
+            </a>
+            
+            {% if current_user.is_authenticated %}
+            <a href="{{ url_for('autos.stock') }}" class="btn btn-outline-primary">
+                <i class="fas fa-warehouse"></i> Ver Stock
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function copiarURL() {
+    var copyText = document.getElementById("urlFicha");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999);
+    document.execCommand("copy");
+    
+    // Mostrar mensaje
+    alert("URL copiada al portapapeles");
+}
+</script>
+{% endblock %}

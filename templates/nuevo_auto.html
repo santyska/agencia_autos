@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+
+{% block title %}Agregar Nuevo Auto{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0"><i class="fas fa-car me-2"></i>Agregar Nuevo Auto</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="marca" class="form-label">Marca *</label>
+                                <input type="text" class="form-control" id="marca" name="marca" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="modelo" class="form-label">Modelo *</label>
+                                <input type="text" class="form-control" id="modelo" name="modelo" required>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="anio" class="form-label">Año *</label>
+                                <input type="number" class="form-control" id="anio" name="anio" min="1900" max="2030" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="precio" class="form-label">Precio de Venta *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text" id="simbolo-moneda">$</span>
+                                    <input type="number" class="form-control" id="precio" name="precio" step="0.01" min="0" required>
+                                    <select class="form-select" id="moneda" name="moneda" style="max-width: 80px;">
+                                        <option value="ARS" selected>ARS</option>
+                                        <option value="USD">USD</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="color" class="form-label">Color</label>
+                                <input type="text" class="form-control" id="color" name="color">
+                            </div>
+                        </div>
+                        
+                        {% if session.get('rol') == 'admin' %}
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="precio_compra" class="form-label">Precio de Compra (Solo Admin) *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text" id="simbolo-moneda-compra">$</span>
+                                    <input type="number" class="form-control" id="precio_compra" name="precio_compra" step="0.01" min="0" required>
+                                </div>
+                                <div class="form-text text-danger">Esta información es confidencial y no se muestra al público.</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="mb-3">
+                            <label for="kilometraje" class="form-label">Kilometraje</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="kilometraje" name="kilometraje" min="0">
+                                <span class="input-group-text">km</span>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="descripcion" class="form-label">Descripción</label>
+                            <textarea class="form-control" id="descripcion" name="descripcion" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="fotos" class="form-label">Fotos</label>
+                            <input type="file" class="form-control" id="fotos" name="fotos" multiple accept="image/*">
+                            <div class="form-text">Puedes seleccionar múltiples fotos. La primera será la principal.</div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('autos') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i> Guardar Auto
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const monedaSelect = document.getElementById('moneda');
+        const simboloMoneda = document.getElementById('simbolo-moneda');
+        const simboloMonedaCompra = document.getElementById('simbolo-moneda-compra');
+        
+        // Función para actualizar el símbolo de la moneda
+        function actualizarSimboloMoneda() {
+            const moneda = monedaSelect.value;
+            const simbolo = moneda === 'USD' ? 'US$' : '$';
+            
+            simboloMoneda.textContent = simbolo;
+            if (simboloMonedaCompra) {
+                simboloMonedaCompra.textContent = simbolo;
+            }
+        }
+        
+        // Actualizar al cambiar la moneda
+        monedaSelect.addEventListener('change', actualizarSimboloMoneda);
+        
+        // Actualizar al cargar la página
+        actualizarSimboloMoneda();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container text-center mt-5">
+    <h1>Agencia de Autos</h1>
+    <p class="lead">Sistema de gestión</p>
+    <div class="d-grid gap-3 col-6 mx-auto mt-4">
+        <a href="{{ url_for('autos.autos') }}" class="btn btn-primary btn-lg">Ver y gestionar Autos</a>
+        <a href="{{ url_for('ventas.ventas') }}" class="btn btn-success btn-lg">Ver y registrar Ventas</a>
+    </div>
+</div>
+{% endblock %}

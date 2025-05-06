@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ auto.marca }} {{ auto.modelo }} {{ auto.anio }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <!-- Información principal del auto -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0">{{ auto.marca }} {{ auto.modelo }} {{ auto.anio }}</h3>
+                    <span class="badge bg-light text-dark">{{ auto.estado.value }}</span>
+                </div>
+                
+                <!-- Carrusel de fotos -->
+                <div id="carouselFotos" class="carousel slide" data-bs-ride="carousel">
+                    <div class="carousel-inner">
+                        {% if auto.fotos %}
+                            {% for foto in auto.fotos %}
+                            <div class="carousel-item {% if loop.first %}active{% endif %}">
+                                <img src="{{ url_for('static', filename=foto.ruta_archivo) }}" class="d-block w-100" alt="{{ auto.marca }} {{ auto.modelo }}">
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="carousel-item active">
+                                <div class="bg-light text-center py-5">
+                                    <i class="fas fa-car fa-5x text-secondary"></i>
+                                    <p class="mt-3">No hay fotos disponibles</p>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                    {% if auto.fotos and auto.fotos|length > 1 %}
+                    <button class="carousel-control-prev" type="button" data-bs-target="#carouselFotos" data-bs-slide="prev">
+                        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Anterior</span>
+                    </button>
+                    <button class="carousel-control-next" type="button" data-bs-target="#carouselFotos" data-bs-slide="next">
+                        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Siguiente</span>
+                    </button>
+                    {% endif %}
+                </div>
+                
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Características</h5>
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item"><strong>Marca:</strong> {{ auto.marca }}</li>
+                                <li class="list-group-item"><strong>Modelo:</strong> {{ auto.modelo }}</li>
+                                <li class="list-group-item"><strong>Año:</strong> {{ auto.anio }}</li>
+                                {% if auto.color %}
+                                <li class="list-group-item"><strong>Color:</strong> {{ auto.color }}</li>
+                                {% endif %}
+                                {% if auto.kilometraje %}
+                                <li class="list-group-item"><strong>Kilometraje:</strong> {{ auto.kilometraje|int }} km</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-center mb-4">
+                                <h3 class="text-primary mb-0">
+                                    {{ auto.precio|formato_precio(auto.moneda) }}
+                                    {% if auto.moneda == 'USD' %}<span class="badge bg-info text-white ms-1">U$</span>{% endif %}
+                                </h3>
+                                <p class="text-muted small">Precio de venta</p>
+                                
+                                {% if session.get('rol') == 'admin' %}
+                                <div class="alert alert-warning mt-3">
+                                    <h5 class="mb-1">Información para administrador</h5>
+                                    <div><strong>Precio de compra:</strong> {{ auto.precio_compra|formato_precio(auto.moneda) }}</div>
+                                    <div><strong>Ganancia potencial:</strong> {{ (auto.precio - auto.precio_compra)|formato_precio(auto.moneda) }}</div>
+                                    <div class="small text-danger">Información confidencial</div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            {% if session.get('user_id') %}
+                            <div class="d-grid gap-2">
+                                {% if auto.estado.value == 'Disponible' %}
+                                    <a href="{{ url_for('registrar_venta', auto_id=auto.id) }}" class="btn btn-success">
+                                        <i class="fas fa-shopping-cart me-1"></i> Comprar ahora
+                                    </a>
+                                {% endif %}
+                                {% if session.get('rol') == 'admin' %}
+                                    <a href="{{ url_for('editar_auto', auto_id=auto.id) }}" class="btn btn-outline-secondary">
+                                        <i class="fas fa-edit me-1"></i> Editar Auto
+                                    </a>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% if auto.descripcion %}
+                    <div class="mt-4">
+                        <h5>Descripción</h5>
+                        <p>{{ auto.descripcion }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Panel lateral -->
+        <div class="col-md-4">
+            {% if session.get('user_id') %}
+            <!-- Compartir (solo para usuarios autenticados) -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-share-alt me-2"></i>Compartir</h5>
+                </div>
+                <div class="card-body">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="urlCompartir" value="{{ auto.url_compartir or request.url }}" readonly>
+                        <button class="btn btn-outline-secondary" type="button" onclick="copiarURL()">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <a href="https://wa.me/?text=¡Mira este {{ auto.marca }} {{ auto.modelo }} {{ auto.anio }}! {{ auto.precio|formato_precio(auto.moneda) }}. Más info: {{ auto.url_compartir or request.url }}" 
+                           class="btn btn-success" target="_blank">
+                            <i class="fab fa-whatsapp me-1"></i> Compartir por WhatsApp
+                        </a>
+                        
+                        <a href="mailto:?subject=Auto {{ auto.marca }} {{ auto.modelo }} {{ auto.anio }}&body=¡Mira este auto! {{ auto.marca }} {{ auto.modelo }} {{ auto.anio }} a {{ auto.precio|formato_precio(auto.moneda) }}. Más información: {{ auto.url_compartir or request.url }}"
+                           class="btn btn-outline-primary">
+                            <i class="fas fa-envelope me-1"></i> Compartir por Email
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Información de contacto -->
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-phone me-2"></i>Contacto</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Teléfono:</strong> 1130446269</p>
+                    <p><strong>Email:</strong> fgdmotors@gmail.com</p>
+                    <p><strong>Dirección:</strong> Av. 12 de Octubre, B1664 Manuel Alberti, Provincia de Buenos Aires</p>
+                    <p><strong>Horario:</strong> Lunes a Viernes 9:00 - 18:00</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mt-4">
+        <a href="{{ url_for('autos') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Volver al Catálogo
+        </a>
+    </div>
+</div>
+
+{% if session.get('user_id') %}
+<script>
+function copiarURL() {
+    var copyText = document.getElementById("urlCompartir");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999);
+    document.execCommand("copy");
+    
+    // Mostrar mensaje
+    alert("URL copiada al portapapeles");
+}
+</script>
+{% endif %}
+{% endblock %}

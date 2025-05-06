@@ -1,0 +1,221 @@
+{% extends 'base.html' %}
+
+{% block title %}Gestión de Usuarios{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h2 class="mb-0"><i class="fas fa-users me-2"></i>Gestión de Usuarios</h2>
+            <button type="button" class="btn btn-light" data-bs-toggle="modal" data-bs-target="#modalNuevoUsuario">
+                <i class="fas fa-user-plus me-1"></i> Nuevo Usuario
+            </button>
+        </div>
+        <div class="card-body">
+            {% if usuarios %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Usuario</th>
+                            <th>Nombre</th>
+                            <th>Email</th>
+                            <th>Rol</th>
+                            <th>Comisión</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for usuario in usuarios %}
+                        <tr>
+                            <td>{{ usuario.id }}</td>
+                            <td>{{ usuario.username }}</td>
+                            <td>{{ usuario.nombre }} {{ usuario.apellido }}</td>
+                            <td>{{ usuario.email }}</td>
+                            <td>
+                                <span class="badge {% if usuario.rol == 'admin' %}bg-danger{% else %}bg-success{% endif %}">
+                                    {{ usuario.rol }}
+                                </span>
+                            </td>
+                            <td>{{ usuario.porcentaje_comision }}%</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-primary" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalEditarUsuario"
+                                            data-id="{{ usuario.id }}"
+                                            data-username="{{ usuario.username }}"
+                                            data-nombre="{{ usuario.nombre }}"
+                                            data-apellido="{{ usuario.apellido }}"
+                                            data-email="{{ usuario.email }}"
+                                            data-rol="{{ usuario.rol }}"
+                                            data-comision="{{ usuario.porcentaje_comision }}">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    {% if usuario.id != session.get('user_id') %}
+                                    <a href="{{ url_for('eliminar_usuario', usuario_id=usuario.id) }}" 
+                                       class="btn btn-danger"
+                                       onclick="return confirm('¿Está seguro de eliminar este usuario?')">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i> No hay usuarios registrados.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo Usuario -->
+<div class="modal fade" id="modalNuevoUsuario" tabindex="-1" aria-labelledby="modalNuevoUsuarioLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalNuevoUsuarioLabel">Nuevo Usuario</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('nuevo_usuario') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Nombre de Usuario</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Contraseña</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="nombre" class="form-label">Nombre</label>
+                        <input type="text" class="form-control" id="nombre" name="nombre" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="apellido" class="form-label">Apellido</label>
+                        <input type="text" class="form-control" id="apellido" name="apellido" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="rol" class="form-label">Rol</label>
+                        <select class="form-select" id="rol" name="rol" required>
+                            <option value="vendedor">Vendedor</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="porcentaje_comision" class="form-label">Porcentaje de Comisión</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="porcentaje_comision" name="porcentaje_comision" value="0" min="0" max="100" step="0.01">
+                            <span class="input-group-text">%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Usuario -->
+<div class="modal fade" id="modalEditarUsuario" tabindex="-1" aria-labelledby="modalEditarUsuarioLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalEditarUsuarioLabel">Editar Usuario</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('editar_usuario', usuario_id=0) }}" method="POST" id="form-editar-usuario">
+                <input type="hidden" id="edit_id" name="usuario_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_username" class="form-label">Nombre de Usuario</label>
+                        <input type="text" class="form-control" id="edit_username" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_password" class="form-label">Nueva Contraseña (dejar en blanco para mantener la actual)</label>
+                        <input type="password" class="form-control" id="edit_password" name="password">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_nombre" class="form-label">Nombre</label>
+                        <input type="text" class="form-control" id="edit_nombre" name="nombre" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_apellido" class="form-label">Apellido</label>
+                        <input type="text" class="form-control" id="edit_apellido" name="apellido" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="edit_email" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_rol" class="form-label">Rol</label>
+                        <select class="form-select" id="edit_rol" name="rol" required>
+                            <option value="vendedor">Vendedor</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_porcentaje_comision" class="form-label">Porcentaje de Comisión</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="edit_porcentaje_comision" name="porcentaje_comision" min="0" max="100" step="0.01">
+                            <span class="input-group-text">%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Configurar modal de edición
+    const modalEditarUsuario = document.getElementById('modalEditarUsuario');
+    if (modalEditarUsuario) {
+        modalEditarUsuario.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            
+            // Obtener datos del botón
+            const id = button.getAttribute('data-id');
+            const username = button.getAttribute('data-username');
+            const nombre = button.getAttribute('data-nombre');
+            const apellido = button.getAttribute('data-apellido');
+            const email = button.getAttribute('data-email');
+            const rol = button.getAttribute('data-rol');
+            const comision = button.getAttribute('data-comision');
+            
+            // Actualizar campos del formulario
+            modalEditarUsuario.querySelector('#edit_id').value = id;
+            modalEditarUsuario.querySelector('#edit_username').value = username;
+            modalEditarUsuario.querySelector('#edit_nombre').value = nombre;
+            modalEditarUsuario.querySelector('#edit_apellido').value = apellido;
+            modalEditarUsuario.querySelector('#edit_email').value = email;
+            modalEditarUsuario.querySelector('#edit_rol').value = rol;
+            modalEditarUsuario.querySelector('#edit_porcentaje_comision').value = comision;
+            
+            // Actualizar la URL del formulario para usar el ID correcto
+            const form = document.getElementById('form-editar-usuario');
+            form.action = '/usuarios/editar/' + id;
+        });
+    }
+});
+</script>
+{% endblock %}

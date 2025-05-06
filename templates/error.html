@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block title %}Error - Sistema de Gestión de Autos{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h3 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i> Error en el sistema</h3>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger">
+                        <p><strong>Ha ocurrido un error al procesar su solicitud.</strong></p>
+                        {% if error %}
+                            <p class="text-muted small">Detalles técnicos: {{ error }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <p>Por favor, intente las siguientes opciones:</p>
+                    <ul>
+                        <li>Vuelva a la <a href="{{ url_for('dashboard') }}">página principal</a></li>
+                        <li>Intente nuevamente más tarde</li>
+                        <li>Si el problema persiste, contacte al administrador del sistema</li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                        <i class="fas fa-home me-1"></i> Volver al inicio
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

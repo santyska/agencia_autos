@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block content %}
+    <h2>Registrar Venta</h2>
+    <form method="POST">
+        <div class="mb-3">
+            <label for="auto_id" class="form-label">Auto</label>
+            <select class="form-select" id="auto_id" name="auto_id" required>
+                <option value="">Seleccione un auto</option>
+                {% for auto in autos %}
+                    <option value="{{ auto.id }}">{{ auto.marca }} {{ auto.modelo }} (Año {{ auto.anio }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-3">
+            <label for="fecha" class="form-label">Fecha de Venta</label>
+            <input type="date" class="form-control" id="fecha" name="fecha" value="{{ hoy }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="precio_compra" class="form-label">Precio de Compra</label>
+            <input type="number" class="form-control" id="precio_compra" name="precio_compra" step="0.01" required>
+        </div>
+        <div class="mb-3">
+            <label for="precio_venta" class="form-label">Precio de Venta</label>
+            <input type="number" class="form-control" id="precio_venta" name="precio_venta" step="0.01" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Registrar Venta</button>
+        <a href="{{ url_for('ventas.ventas') }}" class="btn btn-secondary">Cancelar</a>
+    </form>
+{% endblock %}

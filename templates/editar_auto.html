@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% block title %}Editar Auto - {{ auto.marca }} {{ auto.modelo }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h2 class="mb-0">Editar Auto</h2>
+        </div>
+        <div class="card-body">
+            <form method="POST" enctype="multipart/form-data">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="marca" class="form-label">Marca</label>
+                            <input type="text" class="form-control" id="marca" name="marca" value="{{ auto.marca }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="modelo" class="form-label">Modelo</label>
+                            <input type="text" class="form-control" id="modelo" name="modelo" value="{{ auto.modelo }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="anio" class="form-label">Año</label>
+                            <input type="number" class="form-control" id="anio" name="anio" value="{{ auto.anio }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="color" class="form-label">Color</label>
+                            <input type="text" class="form-control" id="color" name="color" value="{{ auto.color }}">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="precio" class="form-label">Precio de Venta</label>
+                            <div class="input-group">
+                                <span class="input-group-text" id="simbolo-moneda">{{ '$' if auto.moneda == 'ARS' else 'US$' }}</span>
+                                <input type="number" class="form-control" id="precio" name="precio" step="0.01" value="{{ auto.precio }}" required>
+                                <select class="form-select" id="moneda" name="moneda" style="max-width: 80px;">
+                                    <option value="ARS" {% if auto.moneda == 'ARS' or not auto.moneda %}selected{% endif %}>ARS</option>
+                                    <option value="USD" {% if auto.moneda == 'USD' %}selected{% endif %}>USD</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="precio_compra" class="form-label">Precio de Compra</label>
+                            <div class="input-group">
+                                <span class="input-group-text" id="simbolo-moneda-compra">{{ '$' if auto.moneda == 'ARS' else 'US$' }}</span>
+                                <input type="number" class="form-control" id="precio_compra" name="precio_compra" step="0.01" value="{{ auto.precio_compra }}">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="kilometraje" class="form-label">Kilometraje</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="kilometraje" name="kilometraje" value="{{ auto.kilometraje }}">
+                                <span class="input-group-text">km</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="descripcion" class="form-label">Descripción</label>
+                    <textarea class="form-control" id="descripcion" name="descripcion" rows="4">{{ auto.descripcion }}</textarea>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="fotos" class="form-label">Agregar más fotos</label>
+                    <input type="file" class="form-control" id="fotos" name="fotos" multiple accept="image/*">
+                    <div class="form-text">Puedes seleccionar múltiples archivos. Formatos permitidos: JPG, PNG, GIF.</div>
+                </div>
+                
+                {% if auto.fotos %}
+                <div class="mb-4">
+                    <label class="form-label">Fotos actuales</label>
+                    <div class="row">
+                        {% for foto in auto.fotos %}
+                        <div class="col-md-3 mb-3">
+                            <div class="card">
+                                <img src="{{ url_for('static', filename=foto.ruta_archivo) }}" class="card-img-top" alt="Foto auto">
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="d-flex justify-content-between">
+                    <a href="{{ url_for('detalle_auto', auto_id=auto.id) }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-1"></i> Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const monedaSelect = document.getElementById('moneda');
+        const simboloMoneda = document.getElementById('simbolo-moneda');
+        const simboloMonedaCompra = document.getElementById('simbolo-moneda-compra');
+        
+        // Función para actualizar el símbolo de la moneda
+        function actualizarSimboloMoneda() {
+            const moneda = monedaSelect.value;
+            const simbolo = moneda === 'USD' ? 'US$' : '$';
+            
+            simboloMoneda.textContent = simbolo;
+            if (simboloMonedaCompra) {
+                simboloMonedaCompra.textContent = simbolo;
+            }
+        }
+        
+        // Actualizar al cambiar la moneda
+        monedaSelect.addEventListener('change', actualizarSimboloMoneda);
+        
+        // Actualizar al cargar la página
+        actualizarSimboloMoneda();
+    });
+</script>
+{% endblock %}
