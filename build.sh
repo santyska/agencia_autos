@@ -21,4 +21,7 @@ python reset_admin.py || echo "Método 2 falló, intentando método 3"
 python create_admin_fixed.py || echo "Método 3 falló, intentando método 4"
 
 # Método de emergencia con hash simple para Render
-python render_admin.py
+python render_admin.py || echo "Método 4 falló, intentando método 5"
+
+# Solución final: crear usuario con contraseña en texto plano
+python fix_render_auth.py

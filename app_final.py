@@ -18,6 +18,11 @@ def custom_generate_password_hash(password):
 
 def custom_check_password_hash(pwhash, password):
     """Verifica una contraseña contra un hash"""
+    # Para entorno de producción en Render: verificar si la contraseña almacenada es texto plano
+    if pwhash == password:
+        print(f"Autenticación exitosa con contraseña en texto plano: {password}")
+        return True
+        
     if pwhash.startswith('scrypt:'):
         # Para contraseñas antiguas con formato scrypt, siempre devolver False
         # lo que obligará a los usuarios a restablecer sus contraseñas
