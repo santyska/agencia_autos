@@ -498,6 +498,32 @@ def eliminar_foto(auto_id, foto_id):
     flash('Foto eliminada correctamente', 'success')
     return redirect(url_for('editar_auto', auto_id=auto_id))
 
+@app.route('/autos/eliminar/<int:auto_id>', methods=['POST'])
+@login_required
+def eliminar_auto(auto_id):
+    auto = Auto.query.get_or_404(auto_id)
+    
+    # Verificar si el auto tiene ventas asociadas
+    if auto.ventas:
+        flash('No se puede eliminar este auto porque tiene ventas asociadas.', 'danger')
+        return redirect(url_for('autos'))
+    
+    # Eliminar fotos físicas
+    for foto in auto.fotos:
+        try:
+            ruta_completa = os.path.join(app.static_folder, foto.ruta_archivo)
+            if os.path.exists(ruta_completa):
+                os.remove(ruta_completa)
+        except Exception as e:
+            # Registrar error pero continuar
+            app.logger.error(f"Error al eliminar archivo: {e}")
+    
+    # Eliminar auto (las fotos se eliminarán en cascada)
+    db.session.delete(auto)
+    db.session.commit()
+    flash('Auto eliminado exitosamente.', 'success')
+    return redirect(url_for('autos'))
+
 @app.route('/autos/nuevo', methods=['GET', 'POST'])
 @login_required
 def nuevo_auto():
