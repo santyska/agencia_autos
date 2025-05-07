@@ -70,16 +70,46 @@ app.config['SECRET_KEY'] = 'macarena1'
 # Configurar la base de datos SQLite con soporte para persistencia
 # Primero intentar usar la ruta de base de datos persistente desde variables de entorno
 persistent_db_path = os.environ.get('DB_PERSISTENT_PATH')
-if persistent_db_path and os.path.exists(os.path.dirname(persistent_db_path)):
+
+# Imprimir información de diagnóstico sobre las rutas
+app.logger.info(f"Variable de entorno DB_PERSISTENT_PATH: {persistent_db_path}")
+app.logger.info(f"Directorio actual: {os.getcwd()}")
+
+# Verificar si estamos en Render (donde debería existir /var/data)
+render_persistent_path = '/var/data/database/agencia.db'
+if os.path.exists('/var/data'):
+    app.logger.info("Detectado entorno Render con directorio persistente /var/data")
+    # Asegurarse de que el directorio existe
+    os.makedirs('/var/data/database', exist_ok=True)
+    # Usar la ruta persistente en Render
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{render_persistent_path}'
+    app.logger.info(f"Usando base de datos persistente en Render: {render_persistent_path}")
+    # Crear un enlace simbólico para mayor compatibilidad
+    if not os.path.exists('agencia.db') and os.path.exists(render_persistent_path):
+        try:
+            os.symlink(render_persistent_path, 'agencia.db')
+            app.logger.info("Enlace simbólico creado de agencia.db a la ubicación persistente")
+        except Exception as e:
+            app.logger.warning(f"No se pudo crear enlace simbólico: {e}")
+elif persistent_db_path and os.path.exists(os.path.dirname(persistent_db_path)):
     # Asegurarse de que el directorio existe
     os.makedirs(os.path.dirname(persistent_db_path), exist_ok=True)
-    # Usar la ruta persistente
+    # Usar la ruta persistente configurada
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{persistent_db_path}'
-    app.logger.info(f"Usando base de datos persistente en: {persistent_db_path}")
+    app.logger.info(f"Usando base de datos persistente configurada: {persistent_db_path}")
 else:
     # Usar la ruta por defecto
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///agencia.db'
-    app.logger.info("Usando base de datos en ruta por defecto")
+    app.logger.info("Usando base de datos en ruta por defecto: agencia.db")
+    
+# Verificar si la base de datos existe y es accesible
+try:
+    if os.path.exists(app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')):
+        app.logger.info("Base de datos verificada y existe")
+    else:
+        app.logger.warning("La base de datos no existe en la ruta configurada")
+except Exception as e:
+    app.logger.error(f"Error al verificar la base de datos: {e}")
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 

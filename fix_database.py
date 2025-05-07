@@ -26,26 +26,68 @@ logger = logging.getLogger("FixDatabase")
 def find_database():
     """Busca la base de datos en varias ubicaciones posibles."""
     possible_paths = [
-        './agencia.db',
-        '/opt/render/project/src/agencia.db',
-        '/var/data/agencia.db',
+        '/var/data/database/agencia.db',  # Ubicación persistente en Render
+        './agencia.db',                   # Directorio actual
+        '/var/data/agencia.db',           # Directorio persistente en Render (ruta antigua)
+        '/opt/render/project/src/agencia.db',  # Ruta de proyecto en Render
         os.path.join(os.getcwd(), 'agencia.db'),
         os.path.join(os.path.dirname(os.getcwd()), 'agencia.db')
     ]
     
+    logger.info(f"Buscando base de datos en las siguientes ubicaciones: {possible_paths}")
+    
+    # Verificar todas las ubicaciones posibles
     for path in possible_paths:
         if os.path.exists(path):
-            logger.info(f"Base de datos encontrada en: {path}")
-            return path
+            try:
+                # Verificar que el archivo sea una base de datos SQLite válida
+                conn = sqlite3.connect(path)
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA integrity_check")
+                result = cursor.fetchone()
+                conn.close()
+                
+                if result and result[0] == 'ok':
+                    file_size = os.path.getsize(path)
+                    logger.info(f"Base de datos válida encontrada en: {path} (Tamaño: {file_size} bytes)")
+                    return path
+                else:
+                    logger.warning(f"Archivo encontrado en {path} pero no es una base de datos SQLite válida")
+            except Exception as e:
+                logger.warning(f"Error al verificar la base de datos en {path}: {e}")
     
     # Buscar recursivamente en el directorio actual
+    logger.info("Buscando base de datos recursivamente en el directorio actual...")
     for root, dirs, files in os.walk('.'):
         if 'agencia.db' in files:
             path = os.path.join(root, 'agencia.db')
-            logger.info(f"Base de datos encontrada en: {path}")
-            return path
+            try:
+                # Verificar que el archivo sea una base de datos SQLite válida
+                conn = sqlite3.connect(path)
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA integrity_check")
+                result = cursor.fetchone()
+                conn.close()
+                
+                if result and result[0] == 'ok':
+                    file_size = os.path.getsize(path)
+                    logger.info(f"Base de datos válida encontrada en: {path} (Tamaño: {file_size} bytes)")
+                    return path
+            except Exception as e:
+                logger.warning(f"Error al verificar la base de datos en {path}: {e}")
     
-    logger.error("No se pudo encontrar la base de datos")
+    # Si no se encuentra ninguna base de datos válida, intentar crear una nueva en la ubicación persistente
+    persistent_path = '/var/data/database/agencia.db'
+    try:
+        if os.path.exists('/var/data/database'):
+            logger.warning("No se encontró ninguna base de datos válida, creando una nueva en ubicación persistente")
+            conn = sqlite3.connect(persistent_path)
+            conn.close()
+            return persistent_path
+    except Exception as e:
+        logger.error(f"Error al crear nueva base de datos: {e}")
+    
+    logger.error("No se pudo encontrar ni crear la base de datos")
     return None
 
 def backup_database(db_path):
