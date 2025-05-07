@@ -59,7 +59,9 @@
                     <td>${{ "%.2f"|format(auto.precio) }}</td>
                     <td>
                         <a href="{{ url_for('autos.editar_auto', auto_id=auto.id) }}" class="btn btn-sm btn-warning">Editar</a>
-                        <a href="{{ url_for('autos.eliminar_auto', auto_id=auto.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('¿Seguro que deseas eliminar este auto?');">Eliminar</a>
+                        <form action="{{ url_for('autos.eliminar_auto', auto_id=auto.id) }}" method="POST" style="display: inline;">
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Seguro que deseas eliminar este auto?');">Eliminar</button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}
