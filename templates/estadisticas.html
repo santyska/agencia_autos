@@ -9,6 +9,52 @@
             <h3 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Estadísticas de Ventas - {{ año_actual }}</h3>
         </div>
         <div class="card-body">
+            <!-- Ventas del mes actual -->
+            <div class="card mb-4 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Ventas del Mes Actual</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="card bg-light h-100">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Total Ventas</h5>
+                                    <h3 class="text-primary mb-0">{{ ventas_mes_actual }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light h-100">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Ventas en ARS</h5>
+                                    <h3 class="text-info mb-0">{{ ventas_mes_actual_ars }}</h3>
+                                    <h4 class="text-info">${{ "%.2f"|format(ingresos_mes_actual_ars) }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light h-100">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Ventas en USD</h5>
+                                    <h3 class="text-warning mb-0">{{ ventas_mes_actual_usd }}</h3>
+                                    <h4 class="text-warning">US${{ "%.2f"|format(ingresos_mes_actual_usd) }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light h-100">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Ganancia Total</h5>
+                                    <h4 class="text-success mb-0">${{ "%.2f"|format(ganancia_mes_actual_ars) }} ARS</h4>
+                                    <h4 class="text-success">US${{ "%.2f"|format(ganancia_mes_actual_usd) }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Resumen de estadísticas -->
             <div class="row mb-4">
                 <div class="col-md-6">
@@ -117,14 +163,10 @@
             <!-- Pestañas para separar las monedas -->
             <ul class="nav nav-tabs mb-3" id="monedaTabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="pesos-tab" data-bs-toggle="tab" data-bs-target="#pesos" type="button" role="tab" aria-controls="pesos" aria-selected="true">
-                        Pesos (ARS)
-                    </button>
+                    <button class="nav-link active" id="pesos-tab" data-bs-toggle="tab" data-bs-target="#pesos" type="button" role="tab" aria-controls="pesos" aria-selected="true">Pesos (ARS)</button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="dolares-tab" data-bs-toggle="tab" data-bs-target="#dolares" type="button" role="tab" aria-controls="dolares" aria-selected="false">
-                        Dólares (USD)
-                    </button>
+                    <button class="nav-link" id="dolares-tab" data-bs-toggle="tab" data-bs-target="#dolares" type="button" role="tab" aria-controls="dolares" aria-selected="false">Dólares (USD)</button>
                 </li>
             </ul>
             
@@ -292,18 +334,27 @@
                         <div class="card-body">
                             {% if ventas_por_vendedor %}
                             <div class="table-responsive">
-                                <table class="table table-sm">
-                                    <thead>
+                                <table class="table table-sm table-striped">
+                                    <thead class="table-primary">
                                         <tr>
                                             <th>Vendedor</th>
-                                            <th class="text-end">Ventas</th>
+                                            <th class="text-center">Total Ventas</th>
+                                            <th class="text-center">Ventas ARS</th>
+                                            <th class="text-center">Ventas USD</th>
+                                            <th class="text-center">Monto Total</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {% for vendedor in ventas_por_vendedor %}
                                         <tr>
                                             <td>{{ vendedor.nombre }}</td>
-                                            <td class="text-end">{{ vendedor.ventas }}</td>
+                                            <td class="text-center fw-bold">{{ vendedor.ventas }}</td>
+                                            <td class="text-center">{{ vendedor.ventas_ars }}</td>
+                                            <td class="text-center">{{ vendedor.ventas_usd }}</td>
+                                            <td class="text-end fw-bold">
+                                                {% if vendedor.monto_ars > 0 %}${{ "%.2f"|format(vendedor.monto_ars) }} ARS<br>{% endif %}
+                                                {% if vendedor.monto_usd > 0 %}US${{ "%.2f"|format(vendedor.monto_usd) }}{% endif %}
+                                            </td>
                                         </tr>
                                         {% endfor %}
                                     </tbody>

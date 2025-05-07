@@ -30,10 +30,17 @@
                                 <div class="mb-3">
                                     <label class="form-label">Precio de Venta Sugerido</label>
                                     <div class="input-group">
-                                        <span class="input-group-text">$</span>
+                                        <span class="input-group-text" id="moneda-simbolo">{{ '$' if auto.moneda == 'ARS' else 'U$' }}</span>
                                         <input type="number" class="form-control" name="precio" value="{{ auto.precio }}" step="0.01" min="0" required>
                                     </div>
                                     <div class="form-text">Puede modificar el precio de venta final.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="moneda" class="form-label">Moneda *</label>
+                                    <select class="form-select" id="moneda" name="moneda" required onchange="actualizarSimboloMoneda()">
+                                        <option value="ARS" {{ 'selected' if auto.moneda == 'ARS' or not auto.moneda }}>ARS (Pesos)</option>
+                                        <option value="USD" {{ 'selected' if auto.moneda == 'USD' }}>USD (Dólares)</option>
+                                    </select>
                                 </div>
                                 {% if session.get('rol') == 'admin' %}
                                 <div class="mb-3">
@@ -58,9 +65,16 @@
                                 <div class="mb-3">
                                     <label for="precio" class="form-label">Precio de Venta Final *</label>
                                     <div class="input-group">
-                                        <span class="input-group-text">$</span>
+                                        <span class="input-group-text" id="moneda-simbolo">$</span>
                                         <input type="number" class="form-control" id="precio" name="precio" step="0.01" min="0" required>
                                     </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="moneda" class="form-label">Moneda *</label>
+                                    <select class="form-select" id="moneda" name="moneda" required onchange="actualizarSimboloMoneda()">
+                                        <option value="ARS" selected>ARS (Pesos)</option>
+                                        <option value="USD">USD (Dólares)</option>
+                                    </select>
                                 </div>
                                 {% endif %}
                             </div>
@@ -174,9 +188,22 @@ function toggleSenaField() {
     }
 }
 
-// Ejecutar la función al cargar la página
+// Función para actualizar el símbolo de la moneda según la selección
+function actualizarSimboloMoneda() {
+    const monedaSelect = document.getElementById('moneda');
+    const monedaSimbolo = document.getElementById('moneda-simbolo');
+    
+    if (monedaSelect.value === 'USD') {
+        monedaSimbolo.textContent = 'U$';
+    } else {
+        monedaSimbolo.textContent = '$';
+    }
+}
+
+// Ejecutar las funciones al cargar la página
 document.addEventListener('DOMContentLoaded', function() {
     toggleSenaField();
+    actualizarSimboloMoneda();
 });
 </script>
 {% endblock %}

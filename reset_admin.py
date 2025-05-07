@@ -13,6 +13,7 @@ if not os.path.exists(db_path):
 
 # Crear un hash de contraseña simple con SHA-256
 def create_password_hash(password):
+    """Genera un hash de contraseña usando SHA-256 igual que en app_final.py"""
     method = 'sha256'
     salt = 'fgdmotors2025'  # Salt fijo para asegurar que podamos recrear el hash
     hash_val = hashlib.sha256((salt + password).encode()).hexdigest()

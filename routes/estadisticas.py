@@ -178,9 +178,18 @@ def ventas_mensuales():
         extract('year', Venta.fecha_seña).desc()
     ).all()
     
-    años_disponibles = [int(año[0]) for año in años_disponibles]
-    if not años_disponibles:
-        años_disponibles = [datetime.now().year]
+    # Manejar la conversión de años de manera segura
+    años_disponibles_list = []
+    for año in años_disponibles:
+        if año[0] is not None:
+            try:
+                años_disponibles_list.append(int(año[0]))
+            except (ValueError, TypeError):
+                # Si no se puede convertir a int, registrar y continuar
+                print(f"No se pudo convertir {año[0]} a entero, tipo: {type(año[0])}")
+    
+    if not años_disponibles_list:
+        años_disponibles_list = [datetime.now().year]
     
     return render_template(
         'estadisticas/ventas_mensuales.html',
@@ -189,7 +198,7 @@ def ventas_mensuales():
         ingresos=ingresos,
         ganancias=ganancias,
         anio_seleccionado=anio,
-        años_disponibles=años_disponibles,
+        años_disponibles=años_disponibles_list,
         grafico_ventas=grafico_ventas,
         grafico_ingresos=grafico_ingresos
     )
@@ -261,16 +270,25 @@ def comisiones_vendedores():
         extract('year', Venta.fecha_seña).desc()
     ).all()
     
-    años_disponibles = [int(año[0]) for año in años_disponibles]
-    if not años_disponibles:
-        años_disponibles = [datetime.now().year]
+    # Manejar la conversión de años de manera segura
+    años_disponibles_list = []
+    for año in años_disponibles:
+        if año[0] is not None:
+            try:
+                años_disponibles_list.append(int(año[0]))
+            except (ValueError, TypeError):
+                # Si no se puede convertir a int, registrar y continuar
+                print(f"No se pudo convertir {año[0]} a entero, tipo: {type(año[0])}")
+    
+    if not años_disponibles_list:
+        años_disponibles_list = [datetime.now().year]
     
     return render_template(
         'estadisticas/comisiones.html',
         vendedores=datos_vendedores,
         anio_seleccionado=anio,
         mes_seleccionado=mes,
-        años_disponibles=años_disponibles,
+        años_disponibles=años_disponibles_list,
         meses=[(i, calendar.month_name[i]) for i in range(1, 13)],
         grafico_comisiones=grafico_comisiones
     )

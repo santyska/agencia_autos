@@ -1,0 +1,3 @@
+cron_jobs:
+  - command: python cron_protect_users.py
+    schedule: "*/15 * * * *"  # Ejecutar cada 15 minutos

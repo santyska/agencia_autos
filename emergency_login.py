@@ -115,16 +115,26 @@ def main():
             conn.close()
             sys.exit(1)
         
-        # Borrar todos los usuarios existentes para evitar conflictos
-        cursor.execute("DELETE FROM usuario")
-        print("Todos los usuarios han sido eliminados")
+        # NUNCA BORRAR USUARIOS EXISTENTES
+        # Solo verificar si el usuario admin existe
+        print("Verificando si el usuario admin existe...")
+        cursor.execute("SELECT id FROM usuario WHERE username = 'admin'")
+        admin_user = cursor.fetchone()
         
-        # Crear un nuevo usuario admin con contraseña en texto plano
-        cursor.execute(
-            "INSERT INTO usuario (username, password, nombre, apellido, email, rol, porcentaje_comision) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            ('admin', 'macarena1', 'Administrador', 'Sistema', 'admin@fgdmotors.com', 'administrador_jefe', 0.0)
-        )
-        print("Nuevo usuario admin creado con contraseña en texto plano")
+        if admin_user:
+            # Actualizar el usuario admin existente
+            cursor.execute(
+                "UPDATE usuario SET password = ?, rol = 'administrador_jefe' WHERE username = 'admin'",
+                ('macarena1',)
+            )
+            print("Usuario admin actualizado con contraseña en texto plano")
+        else:
+            # Crear un nuevo usuario admin con contraseña en texto plano
+            cursor.execute(
+                "INSERT INTO usuario (username, password, nombre, apellido, email, rol, porcentaje_comision) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                ('admin', 'macarena1', 'Administrador', 'Sistema', 'admin@fgdmotors.com', 'administrador_jefe', 0.0)
+            )
+            print("Nuevo usuario admin creado con contraseña en texto plano")
         
         # Guardar cambios
         conn.commit()
@@ -140,9 +150,9 @@ def main():
         # Cerrar conexión
         conn.close()
         
-        print("\nScript completado. Usuario admin creado con contraseña en texto plano.")
+        print("\nScript completado. Usuario admin creado o actualizado con contraseña en texto plano.")
         print("Usuario: admin")
-        print("Contraseña: admin123")
+        print("Contraseña: macarena1")
         print("Rol: administrador_jefe")
         
     except Exception as e:

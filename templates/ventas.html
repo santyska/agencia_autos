@@ -31,13 +31,21 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label for="estado" class="form-label">Estado</label>
                     <select name="estado" id="estado" class="form-select">
                         <option value="">Todos</option>
                         {% for e in estados %}
                         <option value="{{ e }}" {% if estado_seleccionado == e %}selected{% endif %}>{{ e }}</option>
                         {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="moneda" class="form-label">Moneda</label>
+                    <select name="moneda" id="moneda" class="form-select">
+                        <option value="">Todas</option>
+                        <option value="ARS" {% if moneda_seleccionada == 'ARS' %}selected{% endif %}>ARS (Pesos)</option>
+                        <option value="USD" {% if moneda_seleccionada == 'USD' %}selected{% endif %}>USD (Dólares)</option>
                     </select>
                 </div>
                 <div class="col-md-3 align-self-end">
@@ -63,13 +71,10 @@
                             <th>Fecha</th>
                             <th>Auto</th>
                             <th>Cliente</th>
-                            {% if session.get('rol') == 'admin' %}
+                            <th>Moneda</th>
                             <th>Precio de Compra</th>
-                            {% endif %}
                             <th>Precio de Venta</th>
-                            {% if session.get('rol') == 'admin' %}
                             <th>Ganancia</th>
-                            {% endif %}
                             <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
@@ -82,24 +87,33 @@
                                 <tr>
                                     <td>{{ venta.fecha_venta.strftime('%d/%m/%Y') if venta.fecha_venta else venta.fecha_seña.strftime('%d/%m/%Y') }}</td>
                                     <td>
-                                        <a href="{{ url_for('detalle_auto', auto_id=venta.auto.id) }}" class="text-decoration-none">
-                                            {{ venta.auto.marca }} {{ venta.auto.modelo }} ({{ venta.auto.anio }})
-                                        </a>
-                                    </td>
-                                    <td>
-                                        {% if venta.cliente %}
-                                        {{ venta.cliente.nombre }} {{ venta.cliente.apellido }}
+                                        {% if venta.auto %}
+                                        {{ venta.auto.marca }} {{ venta.auto.modelo }} ({{ venta.auto.anio }})
                                         {% else %}
-                                        <span class="text-muted">Cliente no registrado</span>
+                                        Auto no disponible
                                         {% endif %}
                                     </td>
-                                    {% if session.get('rol') == 'admin' %}
-                                    <td>{{ venta.auto.precio_compra|formato_precio(venta.auto.moneda) }}</td>
-                                    {% endif %}
+                                    <td>{{ venta.cliente_nombre }} {{ venta.cliente_apellido }}</td>
+                                    <td>
+                                        <span class="badge {% if venta.moneda == 'ARS' %}bg-info{% else %}bg-warning text-dark{% endif %}">
+                                            {{ venta.moneda }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if venta.auto and venta.auto.precio_compra %}
+                                        {{ venta.auto.precio_compra|formato_precio(venta.moneda) }}
+                                        {% else %}
+                                        N/A
+                                        {% endif %}
+                                    </td>
                                     <td>{{ venta.precio_venta|formato_precio(venta.moneda) }}</td>
-                                    {% if session.get('rol') == 'admin' %}
-                                    <td class="text-success">{{ (venta.precio_venta - venta.auto.precio_compra)|formato_precio(venta.moneda) }}</td>
-                                    {% endif %}
+                                    <td>
+                                        {% if venta.auto and venta.auto.precio_compra %}
+                                        <span class="text-success fw-bold">{{ (venta.precio_venta - venta.auto.precio_compra)|formato_precio(venta.moneda) }}</span>
+                                        {% else %}
+                                        N/A
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <span class="badge {% if venta.estado_pago.value == 'PAGADO' %}bg-success{% elif venta.estado_pago.value == 'PENDIENTE' %}bg-warning{% else %}bg-danger{% endif %}">
                                             {{ venta.estado_pago.value }}
@@ -180,6 +194,9 @@
                             <div class="table-responsive">
                                 <table class="table table-sm">
                                     <tbody>
+                                        <tr class="table-secondary">
+                                            <th colspan="2" class="text-center">Resumen General</th>
+                                        </tr>
                                         <tr>
                                             <th>Total Ventas:</th>
                                             <td class="text-primary fw-bold">${{ "%.2f"|format(total_ventas) }}</td>
@@ -195,6 +212,38 @@
                                         <tr>
                                             <th>Margen de Ganancia:</th>
                                             <td class="fw-bold">{% if total_ventas > 0 %}{{ "%.2f"|format((total_ganancia / total_ventas) * 100) }}{% else %}0.00{% endif %}%</td>
+                                        </tr>
+                                        
+                                        <tr class="table-info">
+                                            <th colspan="2" class="text-center">Ventas en ARS (Pesos)</th>
+                                        </tr>
+                                        <tr>
+                                            <th>Total Ventas ARS:</th>
+                                            <td class="text-primary fw-bold">{{ total_ventas_ars|formato_precio('ARS') }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Total Inversión ARS:</th>
+                                            <td class="text-danger">{{ total_inversion_ars|formato_precio('ARS') }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Ganancia Total ARS:</th>
+                                            <td class="text-success fw-bold">{{ total_ganancia_ars|formato_precio('ARS') }}</td>
+                                        </tr>
+                                        
+                                        <tr class="table-warning">
+                                            <th colspan="2" class="text-center">Ventas en USD (Dólares)</th>
+                                        </tr>
+                                        <tr>
+                                            <th>Total Ventas USD:</th>
+                                            <td class="text-primary fw-bold">{{ total_ventas_usd|formato_precio('USD') }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Total Inversión USD:</th>
+                                            <td class="text-danger">{{ total_inversion_usd|formato_precio('USD') }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Ganancia Total USD:</th>
+                                            <td class="text-success fw-bold">{{ total_ganancia_usd|formato_precio('USD') }}</td>
                                         </tr>
                                     </tbody>
                                 </table>

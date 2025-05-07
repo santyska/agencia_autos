@@ -58,13 +58,32 @@ def ventas():
         anios_venta_query = db.session.query(db.extract('year', Venta.fecha_venta).distinct())
         anios_venta_query = anios_venta_query.filter(Venta.fecha_venta != None)
         anios_venta_query = anios_venta_query.order_by(db.extract('year', Venta.fecha_venta).desc())
-        anios_venta = [int(a[0]) for a in anios_venta_query.all() if a[0] is not None]
+        
+        # Manejar la conversión de años de manera segura
+        anios_venta = []
+        for a in anios_venta_query.all():
+            if a[0] is not None:
+                try:
+                    anios_venta.append(int(a[0]))
+                except (ValueError, TypeError):
+                    # Si no se puede convertir a int, registrar y continuar
+                    print(f"No se pudo convertir {a[0]} a entero, tipo: {type(a[0])}")
         
         # Consulta para años con fecha_seña
         anios_seña_query = db.session.query(db.extract('year', Venta.fecha_seña).distinct())
         anios_seña_query = anios_seña_query.filter(Venta.fecha_seña != None)
         anios_seña_query = anios_seña_query.order_by(db.extract('year', Venta.fecha_seña).desc())
-        anios_seña = [int(a[0]) for a in anios_seña_query.all() if a[0] is not None]
+        
+        # Manejar la conversión de años de manera segura
+        anios_seña = []
+        for a in anios_seña_query.all():
+            if a[0] is not None:
+                try:
+                    anios_seña.append(int(a[0]))
+                except (ValueError, TypeError):
+                    # Si no se puede convertir a int, registrar y continuar
+                    print(f"No se pudo convertir {a[0]} a entero, tipo: {type(a[0])}")
+
         
         # Combinar y eliminar duplicados
         anios = sorted(set(anios_venta + anios_seña), reverse=True)

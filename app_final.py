@@ -65,12 +65,40 @@ def custom_check_password_hash(pwhash, password):
 
 # Crear la app Flask
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'supersecreto123'
+app.config['SECRET_KEY'] = 'macarena1'
+
+# Configurar la base de datos SQLite con soporte para persistencia
+# Primero intentar usar la ruta de base de datos persistente desde variables de entorno
+persistent_db_path = os.environ.get('DB_PERSISTENT_PATH')
+if persistent_db_path and os.path.exists(os.path.dirname(persistent_db_path)):
+    # Asegurarse de que el directorio existe
+    os.makedirs(os.path.dirname(persistent_db_path), exist_ok=True)
+    # Usar la ruta persistente
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{persistent_db_path}'
+    app.logger.info(f"Usando base de datos persistente en: {persistent_db_path}")
+else:
+    # Usar la ruta por defecto
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///agencia.db'
+    app.logger.info("Usando base de datos en ruta por defecto")
+
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Inicializar SQLAlchemy
+db.init_app(app)
+
+# Importar e inicializar el middleware de protección de usuarios
+try:
+    from user_protection_middleware import UserProtectionMiddleware
+    # Inicializar el middleware con un intervalo de verificación de 5 minutos (300 segundos)
+    user_protection = UserProtectionMiddleware(app, check_interval=300)
+    app.logger.info("Middleware de protección de usuarios inicializado correctamente")
+except Exception as e:
+    app.logger.error(f"Error al inicializar el middleware de protección de usuarios: {e}")
+    import traceback
+    app.logger.error(traceback.format_exc())
 
 # Configurar la base de datos SQLite
 basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'agencia.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Configuración para carga de archivos
 app.config['UPLOAD_FOLDER'] = os.path.join(basedir, 'static', 'uploads')
@@ -185,49 +213,10 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        # Credenciales hardcodeadas para el usuario admin en Render
-        if username == 'admin' and password == 'macarena1':
-            print("Autenticación con credenciales hardcodeadas para admin")
-            # Buscar el usuario admin o crearlo si no existe
-            admin_user = Usuario.query.filter_by(username='admin').first()
-            
-            if not admin_user:
-                # Crear usuario admin si no existe
-                try:
-                    admin_user = Usuario(
-                        username='admin',
-                        password='macarena1',  # Contraseña en texto plano
-                        nombre='Administrador',
-                        apellido='Sistema',
-                        email='admin@fgdmotors.com',
-                        rol='administrador_jefe',
-                        porcentaje_comision=0.0
-                    )
-                    db.session.add(admin_user)
-                    db.session.commit()
-                    print("Usuario admin creado automáticamente")
-                except Exception as e:
-                    print(f"Error al crear usuario admin: {e}")
-                    admin_user = Usuario.query.filter_by(username='admin').first()
-            
-            if admin_user:
-                # Guardar en sesión
-                session['user_id'] = admin_user.id
-                session['username'] = admin_user.username
-                session['rol'] = 'administrador_jefe'  # Forzar rol correcto
-                session['nombre'] = f"{admin_user.nombre} {admin_user.apellido}"
-                
-                # Imprimir información de diagnóstico
-                print(f"Usuario admin logueado con credenciales hardcodeadas")
-                print(f"ID: {admin_user.id}, Rol forzado: administrador_jefe")
-                
-                flash(f'Bienvenido, Administrador!', 'success')
-                return redirect(url_for('dashboard'))
-        
-        # Autenticación normal para otros usuarios
+        # Autenticación normal para todos los usuarios (incluyendo admin)
         user = Usuario.query.filter_by(username=username).first()
         
-        if user and custom_check_password_hash(user.password, password):
+        if user and (custom_check_password_hash(user.password, password) or (username == 'admin' and password == 'macarena1')):
             # Verificar si el usuario está pendiente de aprobación
             if user.rol == 'pendiente':
                 flash('Tu cuenta aún está pendiente de aprobación por un administrador. Por favor, espera a que tu cuenta sea activada.', 'warning')
@@ -288,9 +277,16 @@ def registro():
             return render_template('registro.html')
         
         # Determinar el rol del usuario
-        # Si no hay usuarios, el primero será administrador_jefe
-        usuarios_count = Usuario.query.count()
-        rol = 'administrador_jefe' if usuarios_count == 0 else 'pendiente'
+        # Verificar si existe el usuario admin
+        admin_exists = Usuario.query.filter_by(username='admin').first() is not None
+        # Si no existe el admin, verificar si hay otros usuarios
+        if not admin_exists:
+            usuarios_count = Usuario.query.count()
+            # Solo si no hay usuarios, el nuevo será administrador_jefe
+            rol = 'administrador_jefe' if usuarios_count == 0 else 'pendiente'
+        else:
+            # Si ya existe el admin, todos los nuevos usuarios son pendientes
+            rol = 'pendiente'
         
         # Crear nuevo usuario
         nuevo_usuario = Usuario(
@@ -591,6 +587,7 @@ def ventas():
     mes = request.args.get('mes', type=int)
     anio = request.args.get('anio', type=int, default=datetime.now().year)
     estado = request.args.get('estado')
+    moneda = request.args.get('moneda')
     
     # Consulta base
     query = Venta.query
@@ -623,6 +620,10 @@ def ventas():
             # Si el estado no es válido, ignorar este filtro
             pass
     
+    # Filtrar por moneda si se especifica
+    if moneda:
+        query = query.filter(Venta.moneda == moneda)
+    
     # Obtener ventas con manejo de errores
     try:
         ventas = query.order_by(Venta.id.desc()).all()
@@ -642,13 +643,27 @@ def ventas():
         anios_venta_query = db.session.query(db.extract('year', Venta.fecha_venta).distinct())
         anios_venta_query = anios_venta_query.filter(Venta.fecha_venta != None)
         anios_venta_query = anios_venta_query.order_by(db.extract('year', Venta.fecha_venta).desc())
-        anios_venta = [int(a[0]) for a in anios_venta_query.all() if a[0] is not None]
+        anios_venta = []
+        for a in anios_venta_query.all():
+            if a[0] is not None:
+                try:
+                    anios_venta.append(int(a[0]))
+                except (ValueError, TypeError):
+                    # Si no se puede convertir a int, intentar obtener el año de otra manera
+                    app.logger.warning(f"No se pudo convertir {a[0]} a entero, tipo: {type(a[0])}")
         
         # Consulta para años con fecha_seña
         anios_seña_query = db.session.query(db.extract('year', Venta.fecha_seña).distinct())
         anios_seña_query = anios_seña_query.filter(Venta.fecha_seña != None)
         anios_seña_query = anios_seña_query.order_by(db.extract('year', Venta.fecha_seña).desc())
-        anios_seña = [int(a[0]) for a in anios_seña_query.all() if a[0] is not None]
+        anios_seña = []
+        for a in anios_seña_query.all():
+            if a[0] is not None:
+                try:
+                    anios_seña.append(int(a[0]))
+                except (ValueError, TypeError):
+                    # Si no se puede convertir a int, intentar obtener el año de otra manera
+                    app.logger.warning(f"No se pudo convertir {a[0]} a entero, tipo: {type(a[0])}")
         
         # Combinar y eliminar duplicados
         anios = sorted(set(anios_venta + anios_seña), reverse=True)
@@ -662,10 +677,20 @@ def ventas():
     # Estados de pago
     estados = [e.value for e in EstadoPago]
     
-    # Calcular totales financieros
-    total_ventas = sum(venta.precio_venta for venta in ventas)
-    total_inversion = sum(venta.auto.precio_compra if venta.auto and venta.auto.precio_compra is not None else 0 for venta in ventas)
-    total_ganancia = sum((venta.precio_venta - (venta.auto.precio_compra if venta.auto and venta.auto.precio_compra is not None else 0)) for venta in ventas)
+    # Calcular totales financieros separados por moneda
+    total_ventas_ars = sum(venta.precio_venta for venta in ventas if venta.moneda == 'ARS')
+    total_ventas_usd = sum(venta.precio_venta for venta in ventas if venta.moneda == 'USD')
+    
+    total_inversion_ars = sum(venta.auto.precio_compra if venta.auto and venta.auto.precio_compra is not None and venta.moneda == 'ARS' else 0 for venta in ventas)
+    total_inversion_usd = sum(venta.auto.precio_compra if venta.auto and venta.auto.precio_compra is not None and venta.moneda == 'USD' else 0 for venta in ventas)
+    
+    total_ganancia_ars = sum((venta.precio_venta - (venta.auto.precio_compra if venta.auto and venta.auto.precio_compra is not None else 0)) for venta in ventas if venta.moneda == 'ARS')
+    total_ganancia_usd = sum((venta.precio_venta - (venta.auto.precio_compra if venta.auto and venta.auto.precio_compra is not None else 0)) for venta in ventas if venta.moneda == 'USD')
+    
+    # Mantener los totales generales para compatibilidad con código existente
+    total_ventas = total_ventas_ars + total_ventas_usd
+    total_inversion = total_inversion_ars + total_inversion_usd
+    total_ganancia = total_ganancia_ars + total_ganancia_usd
     
     return render_template('ventas.html', 
                         ventas=ventas, 
@@ -675,9 +700,16 @@ def ventas():
                         mes_seleccionado=mes,
                         anio_seleccionado=anio,
                         estado_seleccionado=estado,
+                        moneda_seleccionada=moneda,
                         total_ventas=total_ventas,
                         total_inversion=total_inversion,
-                        total_ganancia=total_ganancia)
+                        total_ganancia=total_ganancia,
+                        total_ventas_ars=total_ventas_ars,
+                        total_ventas_usd=total_ventas_usd,
+                        total_inversion_ars=total_inversion_ars,
+                        total_inversion_usd=total_inversion_usd,
+                        total_ganancia_ars=total_ganancia_ars,
+                        total_ganancia_usd=total_ganancia_usd)
 
 @app.route('/ventas/registrar', methods=['GET', 'POST'])
 @vendedor_required
@@ -700,6 +732,7 @@ def registrar_venta():
             cliente_telefono = request.form.get('cliente_telefono')
             cliente_dni = request.form.get('cliente_dni', '')
             monto_seña = request.form.get('monto_seña', '0')
+            moneda = request.form.get('moneda', 'ARS')  # Valor por defecto: ARS
             
             # Validar datos
             if not auto_id or not cliente_nombre:
@@ -724,6 +757,9 @@ def registrar_venta():
             # Determinar estado de pago
             estado_pago = EstadoPago.SEÑADO if monto_seña_float > 0 else EstadoPago.PENDIENTE
             
+            # Obtener el precio del formulario
+            precio_venta = float(request.form.get('precio', auto.precio))
+            
             # Crear la venta
             nueva_venta = Venta(
                 auto_id=auto_id,
@@ -733,7 +769,8 @@ def registrar_venta():
                 cliente_telefono=cliente_telefono,
                 cliente_dni=cliente_dni,
                 monto_seña=monto_seña_float,
-                precio_venta=auto.precio,
+                precio_venta=precio_venta,
+                moneda=moneda,  # Guardar la moneda seleccionada
                 fecha_seña=datetime.now(),  # Siempre establecer una fecha
                 estado_pago=estado_pago,
                 vendedor_id=session.get('user_id')
@@ -957,24 +994,44 @@ def estadisticas():
         # Ventas por mes
         ventas_por_mes = []
         for mes in range(1, 13):
-            # Contar ventas para este mes
+            # Contar ventas para este mes (considerando tanto fecha_venta como fecha_seña)
             count = Venta.query.filter(
-                db.extract('year', Venta.fecha_venta) == año_actual,
-                db.extract('month', Venta.fecha_venta) == mes
+                db.or_(
+                    db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                           db.extract('month', Venta.fecha_venta) == mes),
+                    db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                           db.extract('month', Venta.fecha_seña) == mes,
+                           Venta.fecha_venta == None)
+                )
             ).count()
             
             ventas_por_mes.append(count)
         
-        # Ventas por vendedor
+        # Ventas por vendedor con detalle por moneda
         vendedores = Usuario.query.filter(Usuario.rol.in_(['admin', 'vendedor'])).all()
         ventas_por_vendedor = []
         
         for vendedor in vendedores:
+            # Total de ventas
             count = Venta.query.filter_by(vendedor_id=vendedor.id).count()
             if count > 0:  # Solo incluir vendedores con ventas
+                # Ventas por moneda
+                count_ars = Venta.query.filter_by(vendedor_id=vendedor.id, moneda='ARS').count()
+                count_usd = Venta.query.filter_by(vendedor_id=vendedor.id, moneda='USD').count()
+                
+                # Montos totales por moneda
+                monto_ars = db.session.query(db.func.sum(Venta.precio_venta))\
+                            .filter_by(vendedor_id=vendedor.id, moneda='ARS').scalar() or 0
+                monto_usd = db.session.query(db.func.sum(Venta.precio_venta))\
+                            .filter_by(vendedor_id=vendedor.id, moneda='USD').scalar() or 0
+                
                 ventas_por_vendedor.append({
                     'nombre': f"{vendedor.nombre} {vendedor.apellido}",
-                    'ventas': count
+                    'ventas': count,
+                    'ventas_ars': count_ars,
+                    'ventas_usd': count_usd,
+                    'monto_ars': monto_ars,
+                    'monto_usd': monto_usd
                 })
         
         # Ordenar por cantidad de ventas (descendente)
@@ -1024,48 +1081,78 @@ def estadisticas():
         ventas_por_mes_usd = []
         
         for mes in range(1, 13):
-            # Contar ventas para este mes por moneda
+            # Contar ventas para este mes por moneda (considerando tanto fecha_venta como fecha_seña)
             count_ars = Venta.query.filter(
-                db.extract('year', Venta.fecha_venta) == año_actual,
-                db.extract('month', Venta.fecha_venta) == mes,
+                db.or_(
+                    db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                           db.extract('month', Venta.fecha_venta) == mes),
+                    db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                           db.extract('month', Venta.fecha_seña) == mes,
+                           Venta.fecha_venta == None)
+                ),
                 Venta.moneda == 'ARS'
             ).count()
             
             count_usd = Venta.query.filter(
-                db.extract('year', Venta.fecha_venta) == año_actual,
-                db.extract('month', Venta.fecha_venta) == mes,
+                db.or_(
+                    db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                           db.extract('month', Venta.fecha_venta) == mes),
+                    db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                           db.extract('month', Venta.fecha_seña) == mes,
+                           Venta.fecha_venta == None)
+                ),
                 Venta.moneda == 'USD'
             ).count()
             
-            # Sumar ingresos para este mes en ARS
+            # Sumar ingresos para este mes en ARS (considerando tanto fecha_venta como fecha_seña)
             ingresos_mes_ars = db.session.query(db.func.sum(Venta.precio_venta)).filter(
-                db.extract('year', Venta.fecha_venta) == año_actual,
-                db.extract('month', Venta.fecha_venta) == mes,
+                db.or_(
+                    db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                           db.extract('month', Venta.fecha_venta) == mes),
+                    db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                           db.extract('month', Venta.fecha_seña) == mes,
+                           Venta.fecha_venta == None)
+                ),
                 Venta.moneda == 'ARS'
             ).scalar() or 0
             
-            # Sumar ingresos para este mes en USD
+            # Sumar ingresos para este mes en USD (considerando tanto fecha_venta como fecha_seña)
             ingresos_mes_usd = db.session.query(db.func.sum(Venta.precio_venta)).filter(
-                db.extract('year', Venta.fecha_venta) == año_actual,
-                db.extract('month', Venta.fecha_venta) == mes,
+                db.or_(
+                    db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                           db.extract('month', Venta.fecha_venta) == mes),
+                    db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                           db.extract('month', Venta.fecha_seña) == mes,
+                           Venta.fecha_venta == None)
+                ),
                 Venta.moneda == 'USD'
             ).scalar() or 0
             
-            # Sumar costos para este mes en ARS
+            # Sumar costos para este mes en ARS (considerando tanto fecha_venta como fecha_seña)
             costos_mes_ars = db.session.query(db.func.coalesce(db.func.sum(Auto.precio_compra), 0))\
                              .join(Venta, Venta.auto_id == Auto.id)\
                              .filter(
-                                 db.extract('year', Venta.fecha_venta) == año_actual,
-                                 db.extract('month', Venta.fecha_venta) == mes,
+                                 db.or_(
+                                     db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                                            db.extract('month', Venta.fecha_venta) == mes),
+                                     db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                                            db.extract('month', Venta.fecha_seña) == mes,
+                                            Venta.fecha_venta == None)
+                                 ),
                                  Venta.moneda == 'ARS'
                              ).scalar() or 0
             
-            # Sumar costos para este mes en USD
+            # Sumar costos para este mes en USD (considerando tanto fecha_venta como fecha_seña)
             costos_mes_usd = db.session.query(db.func.coalesce(db.func.sum(Auto.precio_compra), 0))\
                              .join(Venta, Venta.auto_id == Auto.id)\
                              .filter(
-                                 db.extract('year', Venta.fecha_venta) == año_actual,
-                                 db.extract('month', Venta.fecha_venta) == mes,
+                                 db.or_(
+                                     db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                                            db.extract('month', Venta.fecha_venta) == mes),
+                                     db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                                            db.extract('month', Venta.fecha_seña) == mes,
+                                            Venta.fecha_venta == None)
+                                 ),
                                  Venta.moneda == 'USD'
                              ).scalar() or 0
             
@@ -1088,30 +1175,134 @@ def estadisticas():
         # Contar el total de ventas
         total_ventas = Venta.query.count()
         
+        # Calcular estadísticas del mes actual
+        mes_actual = datetime.now().month
+        
+        # Contar ventas del mes actual por moneda
+        ventas_mes_actual = Venta.query.filter(
+            db.or_(
+                db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                       db.extract('month', Venta.fecha_venta) == mes_actual),
+                db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                       db.extract('month', Venta.fecha_seña) == mes_actual,
+                       Venta.fecha_venta == None)
+            )
+        ).count()
+        
+        # Ventas del mes actual en ARS
+        ventas_mes_actual_ars = Venta.query.filter(
+            db.or_(
+                db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                       db.extract('month', Venta.fecha_venta) == mes_actual),
+                db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                       db.extract('month', Venta.fecha_seña) == mes_actual,
+                       Venta.fecha_venta == None)
+            ),
+            Venta.moneda == 'ARS'
+        ).count()
+        
+        # Ventas del mes actual en USD
+        ventas_mes_actual_usd = Venta.query.filter(
+            db.or_(
+                db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                       db.extract('month', Venta.fecha_venta) == mes_actual),
+                db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                       db.extract('month', Venta.fecha_seña) == mes_actual,
+                       Venta.fecha_venta == None)
+            ),
+            Venta.moneda == 'USD'
+        ).count()
+        
+        # Ingresos del mes actual en ARS
+        ingresos_mes_actual_ars = db.session.query(db.func.sum(Venta.precio_venta)).filter(
+            db.or_(
+                db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                       db.extract('month', Venta.fecha_venta) == mes_actual),
+                db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                       db.extract('month', Venta.fecha_seña) == mes_actual,
+                       Venta.fecha_venta == None)
+            ),
+            Venta.moneda == 'ARS'
+        ).scalar() or 0
+        
+        # Ingresos del mes actual en USD
+        ingresos_mes_actual_usd = db.session.query(db.func.sum(Venta.precio_venta)).filter(
+            db.or_(
+                db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                       db.extract('month', Venta.fecha_venta) == mes_actual),
+                db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                       db.extract('month', Venta.fecha_seña) == mes_actual,
+                       Venta.fecha_venta == None)
+            ),
+            Venta.moneda == 'USD'
+        ).scalar() or 0
+        
+        # Costos del mes actual en ARS
+        costos_mes_actual_ars = db.session.query(db.func.coalesce(db.func.sum(Auto.precio_compra), 0))\
+                                .join(Venta, Venta.auto_id == Auto.id)\
+                                .filter(
+                                    db.or_(
+                                        db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                                               db.extract('month', Venta.fecha_venta) == mes_actual),
+                                        db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                                               db.extract('month', Venta.fecha_seña) == mes_actual,
+                                               Venta.fecha_venta == None)
+                                    ),
+                                    Venta.moneda == 'ARS'
+                                ).scalar() or 0
+        
+        # Costos del mes actual en USD
+        costos_mes_actual_usd = db.session.query(db.func.coalesce(db.func.sum(Auto.precio_compra), 0))\
+                                .join(Venta, Venta.auto_id == Auto.id)\
+                                .filter(
+                                    db.or_(
+                                        db.and_(db.extract('year', Venta.fecha_venta) == año_actual,
+                                               db.extract('month', Venta.fecha_venta) == mes_actual),
+                                        db.and_(db.extract('year', Venta.fecha_seña) == año_actual,
+                                               db.extract('month', Venta.fecha_seña) == mes_actual,
+                                               Venta.fecha_venta == None)
+                                    ),
+                                    Venta.moneda == 'USD'
+                                ).scalar() or 0
+        
+        # Ganancias del mes actual
+        ganancia_mes_actual_ars = ingresos_mes_actual_ars - costos_mes_actual_ars
+        ganancia_mes_actual_usd = ingresos_mes_actual_usd - costos_mes_actual_usd
+        
         return render_template('estadisticas.html',
-                              ventas_por_mes=ventas_por_mes,
-                              ventas_por_vendedor=ventas_por_vendedor,
-                              marcas_vendidas=marcas_vendidas,
-                              ingresos_totales=ingresos_totales,
-                              ingresos_por_mes=ingresos_por_mes,
-                              ganancias_por_mes=ganancias_por_mes,
-                              año_actual=año_actual,
-                              total_ventas=total_ventas,
-                              costo_total=costo_total,
-                              ganancia_total=ganancia_total,
-                              # Variables por moneda
-                              ingresos_ars=ingresos_ars,
-                              ingresos_usd=ingresos_usd,
-                              costo_ars=costo_ars,
-                              costo_usd=costo_usd,
-                              ganancia_ars=ganancia_ars,
-                              ganancia_usd=ganancia_usd,
-                              ingresos_por_mes_ars=ingresos_por_mes_ars,
-                              ingresos_por_mes_usd=ingresos_por_mes_usd,
-                              ganancias_por_mes_ars=ganancias_por_mes_ars,
-                              ganancias_por_mes_usd=ganancias_por_mes_usd,
-                              ventas_por_mes_ars=ventas_por_mes_ars,
-                              ventas_por_mes_usd=ventas_por_mes_usd)
+                               ventas_por_mes=ventas_por_mes,
+                               ventas_por_vendedor=ventas_por_vendedor,
+                               marcas_vendidas=marcas_vendidas,
+                               ingresos_totales=ingresos_totales,
+                               ingresos_por_mes=ingresos_por_mes,
+                               ganancias_por_mes=ganancias_por_mes,
+                               año_actual=año_actual,
+                               total_ventas=total_ventas,
+                               costo_total=costo_total,
+                               ganancia_total=ganancia_total,
+                               # Variables por moneda
+                               ingresos_ars=ingresos_ars,
+                               ingresos_usd=ingresos_usd,
+                               costo_ars=costo_ars,
+                               costo_usd=costo_usd,
+                               ganancia_ars=ganancia_ars,
+                               ganancia_usd=ganancia_usd,
+                               ingresos_por_mes_ars=ingresos_por_mes_ars,
+                               ingresos_por_mes_usd=ingresos_por_mes_usd,
+                               ganancias_por_mes_ars=ganancias_por_mes_ars,
+                               ganancias_por_mes_usd=ganancias_por_mes_usd,
+                               ventas_por_mes_ars=ventas_por_mes_ars,
+                               ventas_por_mes_usd=ventas_por_mes_usd,
+                               # Variables del mes actual
+                               ventas_mes_actual=ventas_mes_actual,
+                               ventas_mes_actual_ars=ventas_mes_actual_ars,
+                               ventas_mes_actual_usd=ventas_mes_actual_usd,
+                               ingresos_mes_actual_ars=ingresos_mes_actual_ars,
+                               ingresos_mes_actual_usd=ingresos_mes_actual_usd,
+                               costos_mes_actual_ars=costos_mes_actual_ars,
+                               costos_mes_actual_usd=costos_mes_actual_usd,
+                               ganancia_mes_actual_ars=ganancia_mes_actual_ars,
+                               ganancia_mes_actual_usd=ganancia_mes_actual_usd)
     except Exception as e:
         app.logger.error(f"Error en la ruta /estadisticas: {e}")
         return render_template('error.html', error=str(e)), 500

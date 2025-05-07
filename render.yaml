@@ -3,7 +3,7 @@ services:
     name: fgd-motors
     env: python
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: gunicorn wsgi:app
+    startCommand: bash render_startup.sh gunicorn wsgi:app
     envVars:
       - key: FLASK_APP
         value: app_final.py
@@ -11,4 +11,21 @@ services:
         value: production
       - key: PYTHON_VERSION
         value: 3.9.18
+      - key: PERSISTENT_STORAGE
+        value: "true"
+      - key: DB_PERSISTENT_PATH
+        value: "/var/data/database/agencia.db"
     healthCheckPath: /
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    cron:
+      - command: python cron_protect_users.py
+        schedule: "*/15 * * * *"  # Ejecutar cada 15 minutos
+      - command: python setup_persistent_db.py
+        schedule: "*/10 * * * *"  # Ejecutar cada 10 minutos
+      - command: bash /var/data/database/sync_db.sh
+        schedule: "*/5 * * * *"  # Sincronizar la base de datos cada 5 minutos
+      - command: curl -s https://${RENDER_EXTERNAL_HOSTNAME} > /dev/null
+        schedule: "*/10 * * * *"  # Ping cada 10 minutos para mantener activo

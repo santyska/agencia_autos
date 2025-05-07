@@ -68,16 +68,26 @@ try:
     for col in columns:
         print(f"- {col[1]} ({col[2]})")
     
-    # Borrar todos los usuarios existentes para evitar conflictos
-    cursor.execute("DELETE FROM usuario")
-    print("Todos los usuarios han sido eliminados")
+    # NUNCA BORRAR USUARIOS EXISTENTES
+    # Solo verificar si el usuario admin existe
+    print("Verificando si el usuario admin existe...")
+    cursor.execute("SELECT id FROM usuario WHERE username = 'admin'")
+    admin_user = cursor.fetchone()
     
-    # Crear un nuevo usuario admin con contraseña sin hash
-    cursor.execute(
-        "INSERT INTO usuario (username, password, nombre, apellido, email, rol, porcentaje_comision) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ('admin', plain_password, 'Administrador', 'Sistema', 'admin@fgdmotors.com', 'administrador_jefe', 0.0)
-    )
-    print("Nuevo usuario admin creado con contraseña sin hash")
+    if admin_user:
+        # Actualizar el usuario admin existente
+        cursor.execute(
+            "UPDATE usuario SET password = ?, rol = 'administrador_jefe' WHERE username = 'admin'",
+            (plain_password,)
+        )
+        print("Usuario admin actualizado con contraseña sin hash")
+    else:
+        # Crear un nuevo usuario admin con contraseña sin hash
+        cursor.execute(
+            "INSERT INTO usuario (username, password, nombre, apellido, email, rol, porcentaje_comision) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ('admin', plain_password, 'Administrador', 'Sistema', 'admin@fgdmotors.com', 'administrador_jefe', 0.0)
+        )
+        print("Nuevo usuario admin creado con contraseña sin hash")
     
     # Guardar cambios
     conn.commit()
@@ -93,9 +103,9 @@ try:
     # Cerrar conexión
     conn.close()
     
-    print("\nScript completado. Usuario admin creado con contraseña sin hash.")
+    print("\nScript completado. Usuario admin creado o actualizado con contraseña sin hash.")
     print("Usuario: admin")
-    print("Contraseña: admin123")
+    print("Contraseña: macarena1")
     print("Rol: administrador_jefe")
     
 except Exception as e:
