@@ -13,40 +13,107 @@ sleep 5
 echo "Creando directorios persistentes..."
 mkdir -p /var/data/database
 mkdir -p /var/data/backups
+mkdir -p /var/data/logs
 chmod -R 777 /var/data
+
+# Configurar logging
+LOG_FILE="/var/data/logs/startup_$(date +%Y%m%d_%H%M%S).log"
+echo "Iniciando log en: $LOG_FILE"
+exec > >(tee -a "$LOG_FILE") 2>&1
 
 # Registrar información del entorno
 echo "Información del entorno:"
 echo "Directorio actual: $(pwd)"
 echo "Contenido del directorio: $(ls -la)"
 echo "Contenido de /var/data: $(ls -la /var/data)"
+echo "Variables de entorno relacionadas con la base de datos:"
+echo "PERSISTENT_STORAGE=${PERSISTENT_STORAGE}"
+echo "DB_PERSISTENT_PATH=${DB_PERSISTENT_PATH}"
+echo "FORCE_PERSISTENT_DB=${FORCE_PERSISTENT_DB}"
 
 # Verificar si existe la base de datos en alguna ubicación
 echo "Verificando ubicaciones de la base de datos:"
-if [ -f "agencia.db" ]; then
-    echo "Base de datos encontrada en directorio actual"
-    DB_SIZE=$(du -h agencia.db | cut -f1)
-    echo "Tamaño: $DB_SIZE"
-    
-    # Copiar a ubicación persistente si no existe o es más reciente
-    if [ ! -f "/var/data/database/agencia.db" ] || [ "agencia.db" -nt "/var/data/database/agencia.db" ]; then
-        echo "Copiando base de datos a ubicación persistente..."
-        cp -f agencia.db /var/data/database/
-        echo "Base de datos copiada exitosamente"
-    fi
+
+# Verificar si existe la base de datos persistente
+PERSISTENT_DB="/var/data/database/agencia.db"
+LOCAL_DB="agencia.db"
+
+# Crear una copia de seguridad antes de cualquier operación
+if [ -f "$LOCAL_DB" ]; then
+    echo "Creando backup de la base de datos local..."
+    cp -f "$LOCAL_DB" "/var/data/backups/agencia_local_$(date +%Y%m%d_%H%M%S).db"
 fi
 
-if [ -f "/var/data/database/agencia.db" ]; then
+if [ -f "$PERSISTENT_DB" ]; then
+    echo "Creando backup de la base de datos persistente..."
+    cp -f "$PERSISTENT_DB" "/var/data/backups/agencia_persistent_$(date +%Y%m%d_%H%M%S).db"
+fi
+
+# Determinar qué base de datos usar
+if [ -f "$PERSISTENT_DB" ]; then
     echo "Base de datos encontrada en ubicación persistente"
-    DB_SIZE=$(du -h /var/data/database/agencia.db | cut -f1)
+    DB_SIZE=$(du -h "$PERSISTENT_DB" | cut -f1)
     echo "Tamaño: $DB_SIZE"
     
-    # Crear un enlace simbólico si no existe
-    if [ ! -f "agencia.db" ] || [ "/var/data/database/agencia.db" -nt "agencia.db" ]; then
+    # Si FORCE_PERSISTENT_DB está activado, siempre usar la persistente
+    if [ "$FORCE_PERSISTENT_DB" = "true" ]; then
+        echo "Forzando uso de base de datos persistente"
+        if [ -f "$LOCAL_DB" ]; then
+            echo "Eliminando base de datos local para evitar conflictos"
+            rm -f "$LOCAL_DB"
+        fi
         echo "Creando enlace simbólico a la base de datos persistente..."
-        ln -sf /var/data/database/agencia.db agencia.db
+        ln -sf "$PERSISTENT_DB" "$LOCAL_DB"
         echo "Enlace creado exitosamente"
+    else
+        # Comparar fechas de modificación
+        if [ -f "$LOCAL_DB" ]; then
+            LOCAL_MOD=$(stat -c %Y "$LOCAL_DB" 2>/dev/null || stat -f %m "$LOCAL_DB")
+            PERSISTENT_MOD=$(stat -c %Y "$PERSISTENT_DB" 2>/dev/null || stat -f %m "$PERSISTENT_DB")
+            
+            if [ "$LOCAL_MOD" -gt "$PERSISTENT_MOD" ]; then
+                echo "La base de datos local es más reciente, copiando a ubicación persistente"
+                cp -f "$LOCAL_DB" "$PERSISTENT_DB"
+                echo "Base de datos copiada exitosamente"
+            else
+                echo "La base de datos persistente es más reciente, usando esta"
+                rm -f "$LOCAL_DB"
+                ln -sf "$PERSISTENT_DB" "$LOCAL_DB"
+                echo "Enlace creado exitosamente"
+            fi
+        else
+            echo "No existe base de datos local, usando la persistente"
+            ln -sf "$PERSISTENT_DB" "$LOCAL_DB"
+            echo "Enlace creado exitosamente"
+        fi
     fi
+elif [ -f "$LOCAL_DB" ]; then
+    echo "Solo se encontró base de datos en directorio local"
+    DB_SIZE=$(du -h "$LOCAL_DB" | cut -f1)
+    echo "Tamaño: $DB_SIZE"
+    
+    echo "Copiando base de datos a ubicación persistente..."
+    cp -f "$LOCAL_DB" "$PERSISTENT_DB"
+    echo "Base de datos copiada exitosamente"
+    
+    echo "Creando enlace simbólico para asegurar consistencia..."
+    rm -f "$LOCAL_DB"
+    ln -sf "$PERSISTENT_DB" "$LOCAL_DB"
+    echo "Enlace creado exitosamente"
+else
+    echo "No se encontró ninguna base de datos existente"
+    echo "Se creará una nueva base de datos al iniciar la aplicación"
+fi
+
+# Verificar permisos
+echo "Verificando permisos de la base de datos..."
+if [ -f "$PERSISTENT_DB" ]; then
+    chmod 666 "$PERSISTENT_DB"
+    echo "Permisos actualizados para la base de datos persistente"
+fi
+if [ -f "$LOCAL_DB" ]; then
+    chmod 666 "$LOCAL_DB"
+    echo "Permisos actualizados para la base de datos local"
 fi
 
 # Hacer una copia de seguridad antes de iniciar

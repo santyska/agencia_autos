@@ -15,11 +15,16 @@ services:
         value: "true"
       - key: DB_PERSISTENT_PATH
         value: "/var/data/database/agencia.db"
+      # Añadir variable para forzar el uso de la base de datos persistente
+      - key: FORCE_PERSISTENT_DB
+        value: "true"
     healthCheckPath: /
     disk:
       name: data
       mountPath: /var/data
       sizeGB: 1
+      # Asegurar que el disco persistente se conserve entre despliegues
+      persistent: true
     cron:
       - command: python cron_protect_users.py
         schedule: "*/15 * * * *"  # Ejecutar cada 15 minutos
@@ -27,5 +32,8 @@ services:
         schedule: "*/10 * * * *"  # Ejecutar cada 10 minutos
       - command: bash /var/data/database/sync_db.sh
         schedule: "*/5 * * * *"  # Sincronizar la base de datos cada 5 minutos
+      # Añadir backup automático diario
+      - command: cp /var/data/database/agencia.db /var/data/backups/agencia_$(date +\%Y\%m\%d).db
+        schedule: "0 0 * * *"  # Backup diario a medianoche
       - command: curl -s https://${RENDER_EXTERNAL_HOSTNAME} > /dev/null
         schedule: "*/10 * * * *"  # Ping cada 10 minutos para mantener activo

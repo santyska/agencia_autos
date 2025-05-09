@@ -70,9 +70,11 @@ app.config['SECRET_KEY'] = 'macarena1'
 # Configurar la base de datos SQLite con soporte para persistencia
 # Primero intentar usar la ruta de base de datos persistente desde variables de entorno
 persistent_db_path = os.environ.get('DB_PERSISTENT_PATH')
+force_persistent = os.environ.get('FORCE_PERSISTENT_DB', 'false').lower() == 'true'
 
 # Imprimir información de diagnóstico sobre las rutas
 app.logger.info(f"Variable de entorno DB_PERSISTENT_PATH: {persistent_db_path}")
+app.logger.info(f"Variable de entorno FORCE_PERSISTENT_DB: {force_persistent}")
 app.logger.info(f"Directorio actual: {os.getcwd()}")
 
 # Verificar si estamos en Render (donde debería existir /var/data)
@@ -81,16 +83,33 @@ if os.path.exists('/var/data'):
     app.logger.info("Detectado entorno Render con directorio persistente /var/data")
     # Asegurarse de que el directorio existe
     os.makedirs('/var/data/database', exist_ok=True)
-    # Usar la ruta persistente en Render
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{render_persistent_path}'
-    app.logger.info(f"Usando base de datos persistente en Render: {render_persistent_path}")
-    # Crear un enlace simbólico para mayor compatibilidad
-    if not os.path.exists('agencia.db') and os.path.exists(render_persistent_path):
-        try:
-            os.symlink(render_persistent_path, 'agencia.db')
-            app.logger.info("Enlace simbólico creado de agencia.db a la ubicación persistente")
-        except Exception as e:
-            app.logger.warning(f"No se pudo crear enlace simbólico: {e}")
+    
+    # Verificar si la base de datos persistente existe
+    if os.path.exists(render_persistent_path) or force_persistent:
+        # Usar la ruta persistente en Render
+        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{render_persistent_path}'
+        app.logger.info(f"Usando base de datos persistente en Render: {render_persistent_path}")
+        
+        # Crear un enlace simbólico para mayor compatibilidad
+        if os.path.exists('agencia.db') and not os.path.islink('agencia.db'):
+            # Si existe una base de datos local y no es un enlace simbólico, hacer backup
+            backup_path = f"agencia_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+            try:
+                shutil.copy2('agencia.db', backup_path)
+                app.logger.info(f"Backup de base de datos local creado: {backup_path}")
+                os.remove('agencia.db')
+            except Exception as e:
+                app.logger.error(f"Error al hacer backup de la base de datos local: {e}")
+        
+        # Crear o actualizar el enlace simbólico
+        if not os.path.exists('agencia.db'):
+            try:
+                os.symlink(render_persistent_path, 'agencia.db')
+                app.logger.info("Enlace simbólico creado de agencia.db a la ubicación persistente")
+            except Exception as e:
+                app.logger.warning(f"No se pudo crear enlace simbólico: {e}")
+    else:
+        app.logger.warning("No se encontró base de datos persistente en Render, se creará una nueva")
 elif persistent_db_path and os.path.exists(os.path.dirname(persistent_db_path)):
     # Asegurarse de que el directorio existe
     os.makedirs(os.path.dirname(persistent_db_path), exist_ok=True)
